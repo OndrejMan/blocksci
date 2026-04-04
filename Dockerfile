@@ -42,7 +42,7 @@ RUN cd blocksci && \
 # Install BlockSci Python bindings
 
 RUN cd blocksci && rm -rf blockscipy/build && \
-    /root/.local/bin/uv venv && CC=gcc-7 CXX=g++-7 /root/.local/bin/uv run pip3 install -e blockscipy
+    /root/.local/bin/uv venv --clear && CC=gcc-7 CXX=g++-7 /root/.local/bin/uv run pip3 install -e blockscipy
 
 # remove the build folder for blockscipy, as we will rebuild again anyway
 
