@@ -28,6 +28,7 @@ ENV PATH="/root/.local/bin:$PATH"
 # Install and pin Python 3.8.20
 RUN uv python install 3.8.20
 RUN uv python pin 3.8.20
+RUN apt-get update && apt-get install -y python3-distro-info
 
 # Create the virtual environment ONCE and activate it globally for all subsequent RUN steps
 ENV VIRTUAL_ENV="/blocksci/.venv"
