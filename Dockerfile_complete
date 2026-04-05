@@ -1,5 +1,5 @@
 # Use your existing image as the base
-FROM blocksci-cj:latest
+FROM ghcr.io/ondrejman/blocksci:latest
 
 # Set the working directory inside the container
 WORKDIR /mnt

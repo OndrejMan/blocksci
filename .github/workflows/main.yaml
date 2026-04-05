@@ -1,12 +1,10 @@
-name: Build and Push to GHCR
+name: Build_main
 
-# Trigger the workflow when code is pushed to the main branch
 on:
   push:
     branches:
       - master 
 
-# CRITICAL: Grant the workflow permission to read the repo and write to GHCR
 permissions:
   contents: read
   packages: write
@@ -19,14 +17,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # 1. FIX: Tells the action to run `git submodule update --recursive`
           submodules: recursive
 
-      # 1. Add QEMU to allow building for architectures other than the runner's
+      - name: Ensure cache directory exists and is writable
+        run: |
+          # Use sudo if your runner user isn't root
+          sudo chown -R $USER:$USER /cache
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      # 2. Set up Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -52,9 +53,17 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          # 3. Tell Buildx to build for both architectures!
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NTHREADS=1
+            NTHREADS=4
+          # --- UPDATED LOCAL CACHE CONFIGURATION ---
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          # Use the exact same variable in your bash script
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
