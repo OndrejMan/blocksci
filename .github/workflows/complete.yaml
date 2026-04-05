@@ -29,8 +29,10 @@ jobs:
       - name: Ensure cache directory exists and is writable
         run: |
           # Use sudo if your runner user isn't root
-          sudo chown -R $(whoami):$(id -gn) /cache
-          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
+          sudo chown -R $(whoami):$(id -gn) /cache || true
+          # Create separate cache directories for each architecture
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-amd64"
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-arm64"
           
       # 1. Add QEMU to allow building for architectures other than the runner's
       - name: Set up QEMU
@@ -56,27 +58,50 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
-      - name: Build and push Docker image
+      - name: Build and push AMD64 (by digest)
+        id: build-amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile_complete
-          push: true
-          # 3. Tell Buildx to build for both architectures!
           platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache
-          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new,mode=max
+          # Push by digest instead of tag to avoid overwriting
+          outputs: type=image,name=ghcr.io/${{ github.repository }}-complete,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
+
+      - name: Build and push ARM64 (by digest)
+        id: build-arm64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile_complete
+          platforms: linux/arm64
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }}-complete,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
+
+      - name: Create and push multi-arch manifest
+        run: |
+          # Use the generated tags from the metadata action to stitch the digests together
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            ghcr.io/${{ github.repository }}-complete@${{ steps.build-amd64.outputs.digest }} \
+            ghcr.io/${{ github.repository }}-complete@${{ steps.build-arm64.outputs.digest }}
 
       - name: Move cache
         run: |
-          # Use the exact same variable in your bash script
-          rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
-          mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
+          # Move AMD64 cache
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-amd64"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
+
+          # Move ARM64 cache
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-arm64"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
       
       - name: Trigger Custom Discord Alarm
-        if: failure()
+        # if: failure()
         uses: OndrejMan/blocksci/.github/actions/discord-alarm@master
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
