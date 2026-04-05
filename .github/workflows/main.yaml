@@ -10,15 +10,28 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build:
     runs-on: self-hosted
+    strategy:
+      # Forces jobs to run one after the other on the same runner to save RAM
+      max-parallel: 1 
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
 
     steps:
+      - name: Prepare Platform Name for Cache
+        id: plat
+        run: |
+          # Replaces slashes with dashes (e.g., linux-amd64) for safe folder names
+          PLATFORM_SAFE=$(echo ${{ matrix.platform }} | tr '/' '-')
+          echo "safe_name=$PLATFORM_SAFE" >> $GITHUB_OUTPUT
+
       - name: Ensure cache directory exists and is writable
         run: |
-          # Use sudo if your runner user isn't root
           sudo chown -R $(whoami):$(id -gn) /cache
-          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,7 +51,61 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NTHREADS=4
+          # Push the image by its SHA digest instead of a tag like "latest"
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}-new" "/cache/${{ github.workflow }}/.buildx-cache-${{ steps.plat.outputs.safe_name }}"
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ steps.plat.outputs.safe_name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: self-hosted
+    needs: build # Waits for both amd64 and arm64 builds to finish
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (Tags)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -47,23 +114,17 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
         with:
-          context: .
-          file: Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NTHREADS=4
-          # --- UPDATED LOCAL CACHE CONFIGURATION ---
-          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache
-          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new,mode=max
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Move cache
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
         run: |
-          # Use the exact same variable in your bash script
-          rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
-          mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "ghcr.io/${{ github.repository }}@sha256:%s " *)
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
