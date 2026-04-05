@@ -24,7 +24,7 @@ jobs:
       - name: Ensure cache directory exists and is writable
         run: |
           # Use sudo if your runner user isn't root
-          sudo chown -R $USER:$USER /cache
+          sudo chown -R $(whoami):$(id -gn) /cache
           mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
           
       # 1. Add QEMU to allow building for architectures other than the runner's
