@@ -15,7 +15,7 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
     libboost-test-dev libssl-dev libjsoncpp-dev libcurl4-openssl-dev \
     libjsonrpccpp-dev libsnappy-dev zlib1g-dev libbz2-dev \
     liblz4-dev libzstd-dev libjemalloc-dev libsparsehash-dev python3-dev \
-    pkg-config git g++-7 gcc-7 ffmpeg libcairo2 libcairo2-dev curl jq
+    python3-pip pkg-config git g++-7 gcc-7 ffmpeg libcairo2 libcairo2-dev curl jq
 
 # Add project files and set working directory
 ADD . /blocksci
