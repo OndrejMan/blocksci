@@ -67,3 +67,10 @@ jobs:
           # Use the exact same variable in your bash script
           rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
           mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
+
+      - name: Trigger Custom Discord Alarm
+        if: failure()
+        uses: OndrejMan/blocksci/.github/actions/discord-alarm@master
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+          discord_id: ${{ secrets.DISCORD_ID}}

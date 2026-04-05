@@ -1,0 +1,30 @@
+name: 'Discord Failure Alarm'
+description: 'Sends a highly visible Discord alert with ping when a pipeline fails.'
+
+inputs:
+  webhook_url:
+    description: 'The secret Discord Webhook URL'
+    required: true
+  discord_id:
+    description: 'The numeric Discord User ID to ping'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Execute curl payload
+      shell: bash
+      env:
+        DISCORD_WEBHOOK: ${{ inputs.webhook_url }}
+      run: |
+        curl -H "Content-Type: application/json" \
+        -d '{
+          "content": "<@${{ inputs.discord_id }}> 🚨 **WAKE UP! PIPELINE FAILED!** 🚨",
+          "embeds": [{
+            "title": "❌ Workflow Failed: ${{ github.workflow }}",
+            "description": "The pipeline just crashed in **${{ github.repository }}**.\nBranch: `${{ github.ref_name }}`",
+            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "color": 16711680
+          }]
+        }' \
+        $DISCORD_WEBHOOK
