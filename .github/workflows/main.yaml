@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # 1. FIX: Tells the action to run `git submodule update --recursive`
+          submodules: recursive
 
       # 1. Add QEMU to allow building for architectures other than the runner's
       - name: Set up QEMU
@@ -53,3 +56,5 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NTHREADS=1
