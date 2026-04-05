@@ -6,6 +6,8 @@ on:
     workflows: ["Build_main"] # This must match the 'name:' of the first workflow exactly
     types:
       - completed
+    branches: 
+      - master
 
 # CRITICAL: Grant the workflow permission to read the repo and write to GHCR
 permissions:
@@ -69,3 +71,10 @@ jobs:
           # Use the exact same variable in your bash script
           rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
           mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
+      
+      - name: Trigger Custom Discord Alarm
+        if: failure()
+        uses: OndrejMan/blocksci/.github/actions/discord-alarm@master
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+          discord_id: ${{ secrets.DISCORD_ID}}
