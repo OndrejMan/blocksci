@@ -1,56 +1,71 @@
-# name: Build second image and Push to GHCR
+name: Build_second
 
-# # Trigger the workflow when code is pushed to the main branch
-# on:
-#   workflow_run:
-#     workflows: ["Build base image and Push to GHCR"] # This must match the 'name:' of the first workflow exactly
-#     types:
-#       - completed
+# Trigger the workflow when code is pushed to the main branch
+on:
+  workflow_run:
+    workflows: ["Build_main"] # This must match the 'name:' of the first workflow exactly
+    types:
+      - completed
 
-# # CRITICAL: Grant the workflow permission to read the repo and write to GHCR
-# permissions:
-#   contents: read
-#   packages: write
+# CRITICAL: Grant the workflow permission to read the repo and write to GHCR
+permissions:
+  contents: read
+  packages: write
 
-# jobs:
-#   build-and-push:
-#     runs-on: self-hosted
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-#       # 1. Add QEMU to allow building for architectures other than the runner's
-#       - name: Set up QEMU
-#         uses: docker/setup-qemu-action@v3
+      - name: Ensure cache directory exists and is writable
+        run: |
+          # Use sudo if your runner user isn't root
+          sudo chown -R $USER:$USER /cache
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
+          
+      # 1. Add QEMU to allow building for architectures other than the runner's
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-#       # 2. Set up Buildx
-#       - name: Set up Docker Buildx
-#         uses: docker/setup-buildx-action@v3
+      # 2. Set up Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-#       - name: Log in to the Container registry
-#         uses: docker/login-action@v3
-#         with:
-#           registry: ghcr.io
-#           username: ${{ github.actor }}
-#           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-#       - name: Extract metadata (tags, labels) for Docker
-#         id: meta
-#         uses: docker/metadata-action@v5
-#         with:
-#           images: ghcr.io/${{ github.repository }}
-#           tags: |
-#             type=raw,value=latest,enable={{is_default_branch}}
-#             type=sha
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
 
-#       - name: Build and push Docker image
-#         uses: docker/build-push-action@v5
-#         with:
-#           context: .
-#           file: Dockerfile_complete
-#           push: true
-#           # 3. Tell Buildx to build for both architectures!
-#           platforms: linux/amd64,linux/arm64
-#           tags: ${{ steps.meta.outputs.tags }}
-#           labels: ${{ steps.meta.outputs.labels }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile_complete
+          push: true
+          # 3. Tell Buildx to build for both architectures!
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          # Use the exact same variable in your bash script
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new" "/cache/${{ github.workflow }}/.buildx-cache"
