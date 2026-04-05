@@ -14,16 +14,16 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Ensure cache directory exists and is writable
+        run: |
+          # Use sudo if your runner user isn't root
+          sudo chown -R $(whoami):$(id -gn) /cache
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Ensure cache directory exists and is writable
-        run: |
-          # Use sudo if your runner user isn't root
-          sudo chown -R $USER:$USER /cache
-          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
