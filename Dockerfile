@@ -35,9 +35,9 @@ ENV VIRTUAL_ENV="/blocksci/.venv"
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
+RUN apt-get update && apt-get install -y python3-apt distro-info
 # Install requirements into the persistent venv
 RUN CC=gcc-7 CXX=g++-7 uv pip install -r pip-all-requirements.txt
-RUN apt-get update && apt-get install -y python3-apt distro-info
 
 # Build BlockSci
 # We explicitly pass the Python executable to CMake so it matches the uv environment exactly
