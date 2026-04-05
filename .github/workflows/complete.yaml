@@ -58,7 +58,7 @@ jobs:
           file: Dockerfile_complete
           push: true
           # 3. Tell Buildx to build for both architectures!
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache
