@@ -1,5 +1,6 @@
 # BlockSci
 
+
 This is a fork of the original BlockSci repository with extensions for the analysis of CoinJoin transactions.
 This fork is a part of the Master's thesis developed for CRoCS laboratory at Masaryk University, Brno, Czech Republic.
 
