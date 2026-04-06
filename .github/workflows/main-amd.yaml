@@ -1,4 +1,4 @@
-name: Build_main
+name: Build_main_amd
 
 on:
   push:
@@ -11,16 +11,15 @@ permissions:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: [self-hosted, X64]
 
     steps:
       - name: Ensure cache directory exists and is writable
         run: |
           # Use sudo if your runner user isn't root
           sudo chown -R $(whoami):$(id -gn) /cache || true
-          # Create separate cache directories for each architecture
+          # Create cache directory for amd64 architecture
           mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-amd64"
-          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-arm64"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,9 +28,6 @@ jobs:
 
       - name: Convert repository name to lowercase
         run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,49 +48,26 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
-      - name: Build and push AMD64 (by digest)
+      - name: Build and push AMD64
         id: build-amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}-cj,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NTHREADS=1
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
           cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
-
-      - name: Build and push ARM64 (by digest)
-        id: build-arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/arm64
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}-cj,push-by-digest=true,name-canonical=true,push=true
-          build-args: |
-            NTHREADS=1
-          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
-          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
-
-      - name: Create and push multi-arch manifest
-        run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            ghcr.io/${{ env.REPO_LC }}-cj@${{ steps.build-amd64.outputs.digest }} \
-            ghcr.io/${{ env.REPO_LC }}-cj@${{ steps.build-arm64.outputs.digest }}
 
       - name: Move cache
         run: |
           # Move AMD64 cache
           rm -rf "/cache/${{ github.workflow }}/.buildx-cache-amd64"
           mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
-
-          # Move ARM64 cache
-          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-arm64"
-          mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
 
       - name: Trigger Custom Discord Alarm
         if: always()
