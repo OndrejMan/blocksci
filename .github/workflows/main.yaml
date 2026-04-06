@@ -27,6 +27,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -44,7 +47,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}-cj
+          images: ghcr.io/${{ env.REPO_LC }}-cj
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
@@ -57,8 +60,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
-          # Push by digest instead of tag to avoid overwriting
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}-cj,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NTHREADS=1
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
@@ -72,7 +74,7 @@ jobs:
           file: Dockerfile
           platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}-cj,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NTHREADS=1
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
@@ -80,10 +82,9 @@ jobs:
 
       - name: Create and push multi-arch manifest
         run: |
-          # Use the generated tags from the metadata action to stitch the digests together
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            ghcr.io/${{ github.repository }}@${{ steps.build-amd64.outputs.digest }} \
-            ghcr.io/${{ github.repository }}@${{ steps.build-arm64.outputs.digest }}
+            ghcr.io/${{ env.REPO_LC }}-cj@${{ steps.build-amd64.outputs.digest }} \
+            ghcr.io/${{ env.REPO_LC }}-cj@${{ steps.build-arm64.outputs.digest }}
 
       - name: Move cache
         run: |
@@ -96,7 +97,7 @@ jobs:
           mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
 
       - name: Trigger Custom Discord Alarm
-        # if: failure()
+        if: always()
         uses: OndrejMan/blocksci/.github/actions/discord-alarm@master
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
