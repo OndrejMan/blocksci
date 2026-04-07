@@ -63,6 +63,7 @@ jobs:
 
       - name: Export digest
         run: |
+          rm -rf /tmp/digests
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
@@ -132,6 +133,7 @@ jobs:
 
       - name: Export digest
         run: |
+          rm -rf /tmp/digests
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
@@ -155,6 +157,9 @@ jobs:
     steps:
       - name: Convert repository name to lowercase
         run: echo "REPO_LC=${IMAGE_NAME,,}" >> $GITHUB_ENV
+
+      - name: Clean up old digests on runner
+        run: rm -rf /tmp/digests
 
       - name: Download digests
         uses: actions/download-artifact@v4
