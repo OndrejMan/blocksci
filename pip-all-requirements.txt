@@ -89,7 +89,7 @@ psutil==6.1.0
 ptyprocess==0.7.0
 pure-eval==0.2.3
 pycparser==2.22
-pycrypto==2.6.1
+pycryptodome==3.20.0
 pytest==6.2.5
 pytest-regtest==1.4.7
 pygments==2.18.0
