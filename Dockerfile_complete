@@ -19,8 +19,8 @@ RUN cd /mnt/blocksci/ && \
     done && \
     echo 'Jupyter detected. Shutting down for parsing phase...' && \
     pkill -f jupyter || true && \
-    sleep 5 \
-    uv pip uninstall crypto \
+    sleep 5 && \
+    uv pip uninstall crypto && \
     uv pip install pycryptodome
 
 # Set the entrypoint to bash as you had in your command
