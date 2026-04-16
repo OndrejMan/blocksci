@@ -30,6 +30,7 @@ from ._blocksci import *
 from ._blocksci import _traverse
 from .currency import *
 from .blockchain_info import *
+from .joinmarket_analysis import *
 from .opreturn import label_application
 from .pickler import *
 
