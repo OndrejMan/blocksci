@@ -1,0 +1,207 @@
+name: Build_second_multiarch
+
+# Trigger the workflow when the multi-arch main build completes
+on:
+  workflow_run:
+    workflows: ["Build_main_multiarch"] # Updated to match your new first workflow
+    types:
+      - completed
+    branches: 
+      - master
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  # Appending -complete here so we can reuse REPO_LC easily in all jobs
+  IMAGE_NAME: ${{ github.repository }}-complete 
+
+jobs:
+  build-amd:
+    runs-on: [self-hosted, X64]
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Ensure cache directory exists
+        run: |
+          sudo chown -R $(whoami):$(id -gn) /cache || true
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-amd64"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          submodules: recursive
+
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${IMAGE_NAME,,}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LC }}
+
+      - name: Build and push AMD64 by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile_complete
+          platforms: linux/amd64
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false 
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
+
+      - name: Export digest
+        run: |
+          rm -rf /tmp/digests
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-amd64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Move cache
+        run: |
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-amd64"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
+
+  build-arm:
+    runs-on: [self-hosted, ARM64]
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Ensure cache directory exists
+        run: |
+          sudo chown -R $(whoami):$(id -gn) /cache || true
+          mkdir -p "/cache/${{ github.workflow }}/.buildx-cache-arm64"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          submodules: recursive
+
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${IMAGE_NAME,,}" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LC }}
+
+      - name: Build and push ARM64 by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile_complete
+          platforms: linux/arm64
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false 
+          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
+          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
+
+      - name: Export digest
+        run: |
+          rm -rf /tmp/digests
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-arm64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Move cache
+        run: |
+          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-arm64"
+          mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
+
+  merge-multiarch:
+    runs-on: [self-hosted]
+    needs: [build-amd, build-arm]
+    # We don't strictly need the workflow_run conclusion check here because needs: ensures the previous jobs succeeded
+    steps:
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${IMAGE_NAME,,}" >> $GITHUB_ENV
+
+      - name: Clean up old digests on runner
+        run: rm -rf /tmp/digests
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LC }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.REPO_LC }}@sha256:%s ' *)
+
+      - name: Trigger Custom Discord Alarm
+        if: always()
+        uses: OndrejMan/blocksci/.github/actions/discord-alarm@master
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+          discord_id: ${{ secrets.DISCORD_ID}}

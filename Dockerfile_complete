@@ -1,0 +1,27 @@
+# Use your existing image as the base
+FROM ghcr.io/ondrejman/blocksci-cj:latest
+
+# Set the working directory inside the container
+WORKDIR /mnt
+
+# Copy the local 'blocksci' folder into the image at /mnt/blocksci
+COPY . /mnt/blocksci
+
+# 1. Start build in background and log to a file (odstraněno duplicitní spuštění)
+# 2. Monitor the log until the Jupyter server line appears
+# 3. Kill the Jupyter process to free up resources for parsing
+RUN cd /mnt/blocksci/ && \
+    ./build.sh > /tmp/build.log 2>&1 & \
+    echo 'Waiting for Jupyter to initialize...' && \
+    until grep -q 'Jupyter Server 2.14.2 is running at:' /tmp/build.log; do \
+      sleep 2; \
+      cat /tmp/build.log; \
+    done && \
+    echo 'Jupyter detected. Shutting down for parsing phase...' && \
+    pkill -f jupyter || true && \
+    sleep 5 && \
+    uv pip uninstall crypto && \
+    uv pip install pycryptodome
+
+# Set the entrypoint to bash as you had in your command
+ENTRYPOINT ["/bin/bash"]
