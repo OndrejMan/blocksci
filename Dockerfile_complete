@@ -1,6 +1,9 @@
 # Use your existing image as the base
 FROM ghcr.io/ondrejman/blocksci-cj:latest
 
+ARG NTHREADS=1
+ENV NTHREADS=${NTHREADS}
+
 # Set the working directory inside the container
 WORKDIR /mnt
 

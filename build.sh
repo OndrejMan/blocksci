@@ -1,7 +1,6 @@
 #!/bin/bash
 
-DEFAULTTHREADS=18
-THREADS=${1:-$DEFAULTTHREADS}
+THREADS=${1:-${NTHREADS:-1}}
 
 echo "Using $THREADS threads"
 cd /mnt/blocksci

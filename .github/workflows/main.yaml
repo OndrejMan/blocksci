@@ -56,7 +56,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=true
           provenance: false 
           build-args: |
-            NTHREADS=1
+            NTHREADS=${{ vars.BLOCKSCI_NTHREADS_AMD64 || '1' }}
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
           cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
 
@@ -125,7 +125,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=true
           provenance: false 
           build-args: |
-            NTHREADS=1
+            NTHREADS=${{ vars.BLOCKSCI_NTHREADS_ARM64 || '1' }}
           cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
           cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
 
