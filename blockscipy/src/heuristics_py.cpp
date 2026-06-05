@@ -85,6 +85,10 @@ void init_heuristics(py::module &m) {
             py::arg("min_base_fee"), py::arg("percentage_fee"), py::arg("max_depth") = 0,
             "This function uses subset matching in order to determine whether this transaction is a JoinMarket "
             "coinjoin. If maxDepth != 0, it limits the total number of possible subsets the algorithm will check.")
+        .def_static("set_test_values_enabled", &heuristics::setTestValuesEnabled, py::arg("enabled"),
+                    "Enable or disable BlockSci test-value heuristic thresholds for this process")
+        .def_static("test_values_enabled", &heuristics::testValuesEnabled,
+                    "Return whether BlockSci test-value heuristic thresholds are enabled")
         .def_static(
             "is_definite_coinjoin",
             [](int64_t minBaseFee, double percentageFee, size_t maxDepth) -> Proxy<int64_t> {

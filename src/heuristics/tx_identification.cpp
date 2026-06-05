@@ -17,11 +17,23 @@
 #include <numeric>
 #include <optional>
 #include <range/v3/range_for.hpp>
+#include <atomic>
 #include <unordered_map>
 #include <unordered_set>
 
 namespace blocksci {
     namespace heuristics {
+        namespace {
+            std::atomic<bool> testValuesEnabledFlag{false};
+        }
+
+        void setTestValuesEnabled(bool enabled) {
+            testValuesEnabledFlag.store(enabled);
+        }
+
+        bool testValuesEnabled() {
+            return testValuesEnabledFlag.load();
+        }
 
         // Peeling chains have one input and two outputs
         bool looksLikePeelingChain(const Transaction &tx) {
@@ -716,7 +728,7 @@ namespace blocksci {
             if (blockHeight < blocksci::CoinjoinUtils::FirstWasabi2Block) {
                 return false;
             }
-            auto inputLimit = blockHeight < 850237 ? 20 : 20;
+            auto inputLimit = blockHeight < 850237 ? (testValuesEnabled() ? 20 : 50) : 20;
             for (const auto &input : tx.inputs()) {
                 if (input.getType() != AddressType::Enum::WITNESS_PUBKEYHASH &&
                     input.getType() != AddressType::Enum::WITNESS_UNKNOWN) {

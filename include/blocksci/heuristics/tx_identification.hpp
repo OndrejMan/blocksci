@@ -48,6 +48,8 @@ namespace blocksci {
             None
         };
         bool BLOCKSCI_EXPORT isCoinjoin(const Transaction &tx);
+        void BLOCKSCI_EXPORT setTestValuesEnabled(bool enabled);
+        bool BLOCKSCI_EXPORT testValuesEnabled();
 
         /**
          * Wasabi 2 CoinJoin detection, ported from Dumplings.
