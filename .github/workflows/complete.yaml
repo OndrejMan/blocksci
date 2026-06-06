@@ -83,8 +83,12 @@ jobs:
 
       - name: Move cache
         run: |
-          rm -rf "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-amd64"
-          mv "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-amd64" "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-amd64" || true
+          new_cache="${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-amd64"
+          cache="${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-amd64"
+          if [ -d "$new_cache" ]; then
+            rm -rf "$cache"
+            mv "$new_cache" "$cache"
+          fi
 
   build-arm:
     runs-on: [self-hosted]
@@ -154,8 +158,12 @@ jobs:
 
       - name: Move cache
         run: |
-          rm -rf "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-arm64"
-          mv "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-arm64" "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-arm64" || true
+          new_cache="${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-arm64"
+          cache="${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-arm64"
+          if [ -d "$new_cache" ]; then
+            rm -rf "$cache"
+            mv "$new_cache" "$cache"
+          fi
 
   merge-multiarch:
     runs-on: [self-hosted, X64]
