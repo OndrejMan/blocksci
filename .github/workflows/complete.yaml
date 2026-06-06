@@ -86,7 +86,7 @@ jobs:
           mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
 
   build-arm:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Ensure cache directory exists
