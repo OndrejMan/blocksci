@@ -1,12 +1,11 @@
 name: Build_second_multiarch
 
-# Trigger the workflow when the multi-arch main build completes
 on:
   workflow_run:
-    workflows: ["Build_main_multiarch"] # Updated to match your new first workflow
+    workflows: ["Build_main_multiarch"]
     types:
       - completed
-    branches: 
+    branches:
       - master
 
 permissions:
@@ -15,8 +14,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Appending -complete here so we can reuse REPO_LC easily in all jobs
-  IMAGE_NAME: ${{ github.repository }}-complete 
+  IMAGE_NAME: ${{ github.repository }}-complete
 
 jobs:
   build-amd:
@@ -69,16 +67,16 @@ jobs:
 
       - name: Export digest
         run: |
-          rm -rf /tmp/digests
-          mkdir -p /tmp/digests
+          rm -rf /tmp/digests-amd64
+          mkdir -p /tmp/digests-amd64
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+          touch "/tmp/digests-amd64/${digest#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
           name: digests-amd64
-          path: /tmp/digests/*
+          path: /tmp/digests-amd64/*
           if-no-files-found: error
           retention-days: 1
 
@@ -88,7 +86,7 @@ jobs:
           mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
 
   build-arm:
-    runs-on: [self-hosted, ARM64]
+    runs-on: [self-hosted, X64]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Ensure cache directory exists
@@ -140,16 +138,16 @@ jobs:
 
       - name: Export digest
         run: |
-          rm -rf /tmp/digests
-          mkdir -p /tmp/digests
+          rm -rf /tmp/digests-arm64
+          mkdir -p /tmp/digests-arm64
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+          touch "/tmp/digests-arm64/${digest#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
           name: digests-arm64
-          path: /tmp/digests/*
+          path: /tmp/digests-arm64/*
           if-no-files-found: error
           retention-days: 1
 
@@ -159,9 +157,8 @@ jobs:
           mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
 
   merge-multiarch:
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, X64]
     needs: [build-amd, build-arm]
-    # We don't strictly need the workflow_run conclusion check here because needs: ensures the previous jobs succeeded
     steps:
       - name: Convert repository name to lowercase
         run: echo "REPO_LC=${IMAGE_NAME,,}" >> $GITHUB_ENV
