@@ -5,6 +5,7 @@ FROM ubuntu:20.04
 ARG DEBIAN_FRONTEND=noninteractive
 # Lower threads to prevent Out-Of-Memory (OOM) crashes during C++ compilation
 ARG NTHREADS=1 
+ENV NTHREADS=${NTHREADS}
 
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt-get update
