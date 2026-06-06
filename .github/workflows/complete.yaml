@@ -15,6 +15,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-complete
+  BUILDX_CACHE_ROOT: /var/tmp/blocksci-buildx-cache
 
 jobs:
   build-amd:
@@ -62,8 +63,8 @@ jobs:
           provenance: false 
           build-args: |
             NTHREADS=${{ vars.BLOCKSCI_NTHREADS_AMD64 || '1' }}
-          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-amd64
-          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
+          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/${{ github.workflow }}/.buildx-cache-amd64
+          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/${{ github.workflow }}/.buildx-cache-new-amd64,mode=max
 
       - name: Export digest
         run: |
@@ -82,8 +83,8 @@ jobs:
 
       - name: Move cache
         run: |
-          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-amd64"
-          mv "/cache/${{ github.workflow }}/.buildx-cache-new-amd64" "/cache/${{ github.workflow }}/.buildx-cache-amd64" || true
+          rm -rf "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-amd64"
+          mv "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-amd64" "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-amd64" || true
 
   build-arm:
     runs-on: [self-hosted]
@@ -133,8 +134,8 @@ jobs:
           provenance: false 
           build-args: |
             NTHREADS=${{ vars.BLOCKSCI_NTHREADS_ARM64 || '1' }}
-          cache-from: type=local,src=/cache/${{ github.workflow }}/.buildx-cache-arm64
-          cache-to: type=local,dest=/cache/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
+          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/${{ github.workflow }}/.buildx-cache-arm64
+          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/${{ github.workflow }}/.buildx-cache-new-arm64,mode=max
 
       - name: Export digest
         run: |
@@ -153,8 +154,8 @@ jobs:
 
       - name: Move cache
         run: |
-          rm -rf "/cache/${{ github.workflow }}/.buildx-cache-arm64"
-          mv "/cache/${{ github.workflow }}/.buildx-cache-new-arm64" "/cache/${{ github.workflow }}/.buildx-cache-arm64" || true
+          rm -rf "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-arm64"
+          mv "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-new-arm64" "${BUILDX_CACHE_ROOT}/${{ github.workflow }}/.buildx-cache-arm64" || true
 
   merge-multiarch:
     runs-on: [self-hosted, X64]
