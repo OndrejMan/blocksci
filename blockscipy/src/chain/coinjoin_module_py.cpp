@@ -322,6 +322,36 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "Filter coinjoin transactions", pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("coinjoin_type"), pybind11::arg("min_input_count") = std::nullopt)
         .def(
+            "filter_joinmarket_txes",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,
+               double percentageFee, size_t maxDepth) {
+                std::vector<Transaction> detected;
+                std::vector<Transaction> skipped;
+                for (auto block : chain[{start, stop}]) {
+                    for (auto tx : block) {
+                        blocksci::heuristics::CoinJoinResult result;
+                        if (detector == "possible") {
+                            result = blocksci::heuristics::isPossibleCoinjoin(tx, minBaseFee, percentageFee, maxDepth);
+                        } else if (detector == "definite") {
+                            result = blocksci::heuristics::isCoinjoinExtra(tx, minBaseFee, percentageFee, maxDepth);
+                        } else {
+                            throw std::runtime_error("Unknown JoinMarket detector: " + detector);
+                        }
+
+                        if (result == blocksci::heuristics::CoinJoinResult::True) {
+                            detected.push_back(tx);
+                        } else if (result == blocksci::heuristics::CoinJoinResult::Timeout) {
+                            skipped.push_back(tx);
+                        }
+                    }
+                }
+                return py::make_tuple(detected, skipped);
+            },
+            "Filter JoinMarket coinjoin transactions with subset-matching detector settings",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("detector") = "definite",
+            pybind11::arg("min_base_fee") = 5000, pybind11::arg("percentage_fee") = 0.00004,
+            pybind11::arg("max_depth") = 200000)
+        .def(
             "find_hw_sw_coinjoins",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop) {
                 return chain[{start, stop}].filter([](const Transaction &tx) {
