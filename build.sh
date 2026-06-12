@@ -29,4 +29,4 @@ mv build/compile_commands_merged.json build/compile_commands.json
 
 cd Notebooks
 
-jupyter notebook --ip="0.0.0.0" --allow-root || exit 1
+jupyter notebook --no-browser --ip="0.0.0.0" --allow-root || exit 1
