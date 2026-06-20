@@ -103,7 +103,7 @@ namespace blocksci {
             // Powers of 10 * 5 (1-2-5 series)
             for (int i = 0; i < INT_MAX; i++) {
                 denom *= 10;
-                auto a = denom * 2;
+                auto a = denom * 5;
 
                 if (denom < minSatoshis) {
                     continue;
