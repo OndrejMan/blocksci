@@ -27,8 +27,9 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto txes = chain[{start, stop}].filter(
-        [&](const Transaction &tx) { return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype); });
+    auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
+        return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype, minInputCount);
+    });
 
     if (txes.empty()) {
         return {};
