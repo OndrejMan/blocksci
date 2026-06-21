@@ -59,15 +59,21 @@ namespace segwit_addr {
 
 /** Decode a SegWit address. */
 std::pair<int, segwit_data> decode(const std::string& hrp, const std::string& addr) {
-    std::pair<std::string, segwit_data> dec = bech32::decode(addr);
-    if (dec.first != hrp || dec.second.size() < 1) return std::make_pair(-1, segwit_data());
+    auto dec = bech32::decodeWithEncoding(addr);
+    const auto &decoded_hrp = std::get<0>(dec);
+    const auto &decoded_data = std::get<1>(dec);
+    const auto encoding = std::get<2>(dec);
+    if (decoded_hrp != hrp || decoded_data.size() < 1) return std::make_pair(-1, segwit_data());
     segwit_data conv;
-    if (!convertbits<5, 8, false>(conv, segwit_data(dec.second.begin() + 1, dec.second.end())) ||
-        conv.size() < 2 || conv.size() > 40 || dec.second[0] > 16 || (dec.second[0] == 0 &&
-        conv.size() != 20 && conv.size() != 32)) {
+    const int witness_version = decoded_data[0];
+    if (!convertbits<5, 8, false>(conv, segwit_data(decoded_data.begin() + 1, decoded_data.end())) ||
+        conv.size() < 2 || conv.size() > 40 || witness_version > 16 ||
+        (witness_version == 0 && (conv.size() != 20 && conv.size() != 32)) ||
+        (witness_version == 0 && encoding != bech32::Encoding::BECH32) ||
+        (witness_version != 0 && encoding != bech32::Encoding::BECH32M)) {
         return std::make_pair(-1, segwit_data());
     }
-    return std::make_pair(dec.second[0], conv);
+    return std::make_pair(witness_version, conv);
 }
 
 /** Encode a SegWit address. */
@@ -75,7 +81,8 @@ std::string encode(const std::string& hrp, int witver, const segwit_data& witpro
     segwit_data enc;
     enc.push_back(static_cast<unsigned char>(witver));
     convertbits<8, 5, true>(enc, witprog);
-    std::string ret = bech32::encode(hrp, enc);
+    const auto encoding = witver == 0 ? bech32::Encoding::BECH32 : bech32::Encoding::BECH32M;
+    std::string ret = bech32::encode(hrp, enc, encoding);
     if (decode(hrp, ret).first == -1) return "";
     return ret;
 }
@@ -84,7 +91,8 @@ std::string encode(const blocksci::ChainConfiguration &config, int witver, const
     segwit_data enc;
     enc.push_back(static_cast<unsigned char>(witver));
     convertbits<8, 5, true>(enc, witprog);
-    std::string ret = bech32::encode(config.segwitPrefix, enc);
+    const auto encoding = witver == 0 ? bech32::Encoding::BECH32 : bech32::Encoding::BECH32M;
+    std::string ret = bech32::encode(config.segwitPrefix, enc, encoding);
     if (decode(config.segwitPrefix, ret).first == -1) return "";
     return ret;
 }
