@@ -1,6 +1,7 @@
 #!/bin/bash
 
 THREADS=${1:-${NTHREADS:-1}}
+SKIP_JUPYTER=${SKIP_JUPYTER:-0}
 
 echo "Using $THREADS threads"
 cd /mnt/blocksci
@@ -15,9 +16,11 @@ cd /mnt/blocksci
 
 pip3 install -r pip-all-requirements.txt || exit 1
 
-pip3 install jupyter notebook
-pip3 install jupyter_contrib_nbextensions
-jupyter contrib nbextension install --user
+if [ "$SKIP_JUPYTER" != "1" ]; then
+    pip3 install jupyter notebook
+    pip3 install jupyter_contrib_nbextensions
+    jupyter contrib nbextension install --user
+fi
 
 
 CC=gcc-7 CXX=g++-7 pip3 install -e blockscipy || exit 1
@@ -29,4 +32,6 @@ mv build/compile_commands_merged.json build/compile_commands.json
 
 cd Notebooks
 
-jupyter notebook --no-browser --ip="0.0.0.0" --allow-root || exit 1
+if [ "$SKIP_JUPYTER" != "1" ]; then
+    jupyter notebook --no-browser --ip="0.0.0.0" --allow-root || exit 1
+fi
