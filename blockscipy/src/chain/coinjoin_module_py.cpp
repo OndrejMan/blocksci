@@ -38,30 +38,30 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     // filter txes which are not connected to any other coinjoin tx
     std::unordered_set<Transaction> txSet;
     for (const auto &tx : txes) {
-        txSet.insert(tx);
-    }
-
-    std::unordered_set<Transaction> result;
-    result.insert(txes[0]);
-
-    for (const auto &tx : txSet) {
         if (falsePositives.has_value() &&
             falsePositives.value().find(tx.getHash().GetHex()) != falsePositives.value().end()) {
             continue;
         }
+        txSet.insert(tx);
+    }
+
+    std::unordered_set<Transaction> result;
+    for (const auto &tx : txSet) {
         for (const auto &input : tx.inputs()) {
-            if (txSet.find(input.getSpentTx()) != txSet.end()) {
+            const auto spentTx = input.getSpentTx();
+            if (txSet.find(spentTx) != txSet.end()) {
                 result.insert(tx);
-                if (minInputCount.has_value()) {
-                    for (const auto &output : tx.outputs()) {
-                        if (!output.isSpent()) continue;
-                        if (blocksci::heuristics::isCoinjoinOfGivenType(output.getSpendingTx().value(), coinjoinType,
-                                                                        subtype, minInputCount)) {
-                            result.insert(tx);
-                        }
-                    }
-                }
-                break;
+                result.insert(spentTx);
+            }
+        }
+        for (const auto &output : tx.outputs()) {
+            if (!output.isSpent()) {
+                continue;
+            }
+            const auto spendingTx = output.getSpendingTx().value();
+            if (txSet.find(spendingTx) != txSet.end()) {
+                result.insert(tx);
+                result.insert(spendingTx);
             }
         }
     }
@@ -322,6 +322,24 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             },
             "Filter coinjoin transactions", pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("coinjoin_type"), pybind11::arg("min_input_count") = std::nullopt)
+        .def(
+            "filter_coinjoin_txes_raw",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
+               std::optional<int> minInputCount) {
+                std::vector<Transaction> detected;
+                for (auto block : chain[{start, stop}]) {
+                    for (auto tx : block) {
+                        if (blocksci::heuristics::isCoinjoinOfGivenType(
+                                tx, coinjoinType, std::nullopt, minInputCount)) {
+                            detected.push_back(tx);
+                        }
+                    }
+                }
+                return detected;
+            },
+            "Filter all transaction-level CoinJoin heuristic matches without linked-transaction reduction",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"),
+            pybind11::arg("min_input_count") = std::nullopt)
         .def(
             "filter_joinmarket_txes",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,

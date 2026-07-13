@@ -13,6 +13,7 @@
 #include <blocksci/chain/transaction.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_variant.hpp>
+#include "witness_unknown_key.hpp"
 #include <iostream>
 #include <numeric>
 #include <optional>
@@ -26,13 +27,6 @@ namespace blocksci {
         namespace {
             std::atomic<bool> testValuesEnabledFlag{false};
 
-            std::string witnessUnknownAddressKey(const WitnessUnknownScriptData &data) {
-                // Identify witness addresses by both their version and their
-                // exact 2-40 byte program (BIP141).
-                std::string key(1, static_cast<char>(data.witnessVersion));
-                key.append(data.scriptData.begin(), data.scriptData.end());
-                return key;
-            }
         }
 
         void setTestValuesEnabled(bool enabled) {
@@ -779,7 +773,10 @@ namespace blocksci {
                 if (input.getAddress().getType() == AddressType::Enum::WITNESS_UNKNOWN) {
                     script::WitnessUnknown witnessUnknownAddress(input.getAddress().scriptNum, tx.getAccess());
                     usedWitnessUnknownAddresses.insert(
-                        witnessUnknownAddressKey(*witnessUnknownAddress.getDataForMe()));
+                        detail::witnessUnknownAddressKey(
+                            witnessUnknownAddress.getDataForMe()->witnessVersion,
+                            witnessUnknownAddress.getDataForMe()->scriptData.begin(),
+                            witnessUnknownAddress.getDataForMe()->scriptData.end()));
 
                 } else {
                     usedAddresses.insert(input.getAddress());
@@ -812,7 +809,10 @@ namespace blocksci {
                 if (output.getAddress().getType() == AddressType::Enum::WITNESS_UNKNOWN) {
                     script::WitnessUnknown witnessUnknownAddress(output.getAddress().scriptNum, tx.getAccess());
                     usedWitnessUnknownAddresses.insert(
-                        witnessUnknownAddressKey(*witnessUnknownAddress.getDataForMe()));
+                        detail::witnessUnknownAddressKey(
+                            witnessUnknownAddress.getDataForMe()->witnessVersion,
+                            witnessUnknownAddress.getDataForMe()->scriptData.begin(),
+                            witnessUnknownAddress.getDataForMe()->scriptData.end()));
                 } else {
                     usedAddresses.insert(output.getAddress());
                 }

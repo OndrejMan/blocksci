@@ -58,8 +58,8 @@ namespace blocksci {
          *  2. We require at least 5 different input and 5 different output addresses in the transaction
          *
          * @param tx The transaction to check
-         * @param inputCount if provided, then the transaction must have this exact input count to be considered
-         *                a Wasabi 2 CoinJoin. Used for collecting transactions around a specific timeframe.
+         * @param inputCount if provided, then the transaction must have at least this many inputs to be considered
+         *                a Wasabi 2 CoinJoin. It overrides the height/test-mode default minimum.
          *
          * @return true if the transaction is a Wasabi 2 CoinJoin, false otherwise
          */
