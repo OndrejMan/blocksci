@@ -25,6 +25,14 @@ namespace blocksci {
     namespace heuristics {
         namespace {
             std::atomic<bool> testValuesEnabledFlag{false};
+
+            std::string witnessUnknownAddressKey(const WitnessUnknownScriptData &data) {
+                // Identify witness addresses by both their version and their
+                // exact 2-40 byte program (BIP141).
+                std::string key(1, static_cast<char>(data.witnessVersion));
+                key.append(data.scriptData.begin(), data.scriptData.end());
+                return key;
+            }
         }
 
         void setTestValuesEnabled(bool enabled) {
@@ -770,12 +778,8 @@ namespace blocksci {
 
                 if (input.getAddress().getType() == AddressType::Enum::WITNESS_UNKNOWN) {
                     script::WitnessUnknown witnessUnknownAddress(input.getAddress().scriptNum, tx.getAccess());
-                    auto *data = witnessUnknownAddress.getDataForMe();
-                    std::string stringData;
-                    stringData.resize(32);
-                    std::copy(data->scriptData.begin(), data->scriptData.end(), stringData.begin());
-
-                    usedWitnessUnknownAddresses.insert(stringData);
+                    usedWitnessUnknownAddresses.insert(
+                        witnessUnknownAddressKey(*witnessUnknownAddress.getDataForMe()));
 
                 } else {
                     usedAddresses.insert(input.getAddress());
@@ -807,12 +811,8 @@ namespace blocksci {
 
                 if (output.getAddress().getType() == AddressType::Enum::WITNESS_UNKNOWN) {
                     script::WitnessUnknown witnessUnknownAddress(output.getAddress().scriptNum, tx.getAccess());
-                    auto *data = witnessUnknownAddress.getDataForMe();
-                    std::string stringData;
-                    stringData.resize(32);
-                    std::copy(data->scriptData.begin(), data->scriptData.end(), stringData.begin());
-
-                    usedWitnessUnknownAddresses.insert(stringData);
+                    usedWitnessUnknownAddresses.insert(
+                        witnessUnknownAddressKey(*witnessUnknownAddress.getDataForMe()));
                 } else {
                     usedAddresses.insert(output.getAddress());
                 }
