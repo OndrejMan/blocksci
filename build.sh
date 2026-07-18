@@ -8,7 +8,10 @@ cd /mnt/blocksci
 
 (mkdir -p build && \
     cd build && \
-    CC=gcc-7 CXX=g++-7 cmake -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE="$(which python3)" .. && \
+    CC=gcc-7 CXX=g++-7 cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DPYTHON_EXECUTABLE="$(which python3)" .. && \
     make -j$THREADS && \
     make install) || exit 1
 

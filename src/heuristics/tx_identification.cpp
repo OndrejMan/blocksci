@@ -730,7 +730,7 @@ namespace blocksci {
             if (blockHeight < blocksci::CoinjoinUtils::FirstWasabi2Block) {
                 return false;
             }
-            auto inputLimit = blockHeight < 850237 ? (testValuesEnabled() ? 20 : 50) : 20;
+            auto inputLimit = blockHeight < 850237 ? (testValuesEnabled() ? 10 : 50) : 20;
             for (const auto &input : tx.inputs()) {
                 if (input.getType() != AddressType::Enum::WITNESS_PUBKEYHASH &&
                     input.getType() != AddressType::Enum::WITNESS_UNKNOWN) {
