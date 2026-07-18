@@ -1,5 +1,7 @@
-# Use your existing image as the base
-FROM ghcr.io/ondrejman/blocksci-cj:latest
+# Use the published dependency image by default. Local builds can override it
+# with a locally built blocksci-cj tag.
+ARG BLOCKSCI_BASE_IMAGE=ghcr.io/ondrejman/blocksci-cj:latest
+FROM ${BLOCKSCI_BASE_IMAGE}
 
 ARG NTHREADS=1
 ENV NTHREADS=${NTHREADS}
