@@ -1072,7 +1072,7 @@ namespace blocksci {
             int maxCountValues = 0;  // Count how many different values have maxCount
             for (const auto &p : valueCounts) {
                 if (p.second > 1 && p.second != maxCount) {
-                    return false;
+                    return false; //todo this fails
                 }
                 if (p.second == maxCount) {
                     maxCountValues++;

@@ -5,14 +5,24 @@ This fork exposes transaction-level CoinJoin heuristics and two different bulk
 scan contracts. Callers must distinguish a direct detector scan from the
 legacy linked-transaction reduction.
 
-JoinMarket range scan
----------------------
+Subset-matching range scan
+--------------------------
 
-``Blockchain.filter_joinmarket_txes(start, stop, detector, min_base_fee,
-percentage_fee, max_depth)`` scans every transaction in the range. ``detector``
-is ``"possible"`` or ``"definite"``. It returns a pair ``(detected, skipped)``;
-``skipped`` contains transactions whose subset search reached ``max_depth``.
-A timeout is not a negative detection and should be reported separately.
+``Blockchain.scan_coinjoins_by_subset_matching(start, stop, detector,
+min_base_fee, percentage_fee, max_depth)`` scans every transaction in the
+range. ``detector`` is ``"possible"`` or ``"definite"``. It returns a pair
+``(detected, skipped)``; ``skipped`` contains transactions whose subset search
+reached ``max_depth``. A timeout is not a negative detection and should be
+reported separately.
+
+This scan is **not protocol-specific**. ``"possible"``
+(``isPossibleCoinjoin``) only requires two equal-value outputs to
+non-input addresses fundable by two distinct input subsets; ``"definite"``
+(``isCoinjoinExtra``) additionally requires one equal output plus optional
+change per participant. Neither excludes Wasabi, Whirlpool or Ashigaru, so
+matches must not be reported as JoinMarket detections. For protocol-specific
+JoinMarket detection use ``filter_coinjoin_txes_raw(..., "joinmarket")``,
+which dispatches to ``isJoinMarketCoinJoin``.
 
 Generic/Wasabi linked scan
 --------------------------

@@ -339,32 +339,38 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"),
             pybind11::arg("min_input_count") = std::nullopt)
         .def(
-            "filter_joinmarket_txes",
+            "scan_coinjoins_by_subset_matching",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,
                double percentageFee, size_t maxDepth) {
+                if (detector != "possible" && detector != "definite") {
+                    throw std::invalid_argument("detector must be \"possible\" or \"definite\", got: " + detector);
+                }
+                bool usePossible = detector == "possible";
+
                 std::vector<Transaction> detected;
                 std::vector<Transaction> skipped;
-                for (auto block : chain[{start, stop}]) {
-                    for (auto tx : block) {
-                        blocksci::heuristics::CoinJoinResult result;
-                        if (detector == "possible") {
-                            result = blocksci::heuristics::isPossibleCoinjoin(tx, minBaseFee, percentageFee, maxDepth);
-                        } else if (detector == "definite") {
-                            result = blocksci::heuristics::isCoinjoinExtra(tx, minBaseFee, percentageFee, maxDepth);
-                        } else {
-                            throw std::runtime_error("Unknown JoinMarket detector: " + detector);
-                        }
+                {
+                    py::gil_scoped_release release;
+                    for (auto block : chain[{start, stop}]) {
+                        for (auto tx : block) {
+                            auto result =
+                                usePossible
+                                    ? blocksci::heuristics::isPossibleCoinjoin(tx, minBaseFee, percentageFee, maxDepth)
+                                    : blocksci::heuristics::isCoinjoinExtra(tx, minBaseFee, percentageFee, maxDepth);
 
-                        if (result == blocksci::heuristics::CoinJoinResult::True) {
-                            detected.push_back(tx);
-                        } else if (result == blocksci::heuristics::CoinJoinResult::Timeout) {
-                            skipped.push_back(tx);
+                            if (result == blocksci::heuristics::CoinJoinResult::True) {
+                                detected.push_back(tx);
+                            } else if (result == blocksci::heuristics::CoinJoinResult::Timeout) {
+                                skipped.push_back(tx);
+                            }
                         }
                     }
                 }
                 return py::make_tuple(detected, skipped);
             },
-            "Filter JoinMarket coinjoin transactions with subset-matching detector settings",
+            "Scan the range with the input-subset-matching coinjoin detector. Not protocol-specific: the "
+            "\"possible\" and \"definite\" detectors match any transaction with equal-value outputs fundable by "
+            "distinct input subsets. Returns (detected, skipped); skipped are searches that hit max_depth.",
             pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("detector") = "definite",
             pybind11::arg("min_base_fee") = 5000, pybind11::arg("percentage_fee") = 0.00004,
             pybind11::arg("max_depth") = 200000)
