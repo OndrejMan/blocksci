@@ -107,6 +107,13 @@ option(WITH_ZSTD "" OFF)
 
 # rocksdb
 
+# RocksDB otherwise defaults to -march=native. Keep the BlockSci image usable
+# on CPUs other than the one that built it; set this before adding the
+# subproject so its option() call preserves the value, including after CMake
+# reconfiguration with an existing cache.
+option(BLOCKSCI_ROCKSDB_PORTABLE "Build vendored RocksDB without CPU-specific instructions" ON)
+set(PORTABLE ${BLOCKSCI_ROCKSDB_PORTABLE} CACHE BOOL "Build RocksDB with portable CPU instructions" FORCE)
+
 add_subdirectory(rocksdb EXCLUDE_FROM_ALL)
 
 add_library(rocksdb_headers INTERFACE)
