@@ -13,9 +13,7 @@ WORKDIR /mnt
 COPY . /mnt/blocksci
 
 RUN cd /mnt/blocksci/ && \
-    SKIP_JUPYTER=1 ./build.sh && \
-    uv pip uninstall crypto && \
-    uv pip install pycryptodome
+    SKIP_JUPYTER=1 ./build.sh
 
 # Set the entrypoint to bash as you had in your command
 ENTRYPOINT ["/bin/bash"]

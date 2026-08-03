@@ -34,8 +34,6 @@ ENV VIRTUAL_ENV="/blocksci/.venv"
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-RUN apt-get update && apt-get install -y python3-apt distro-info unattended-upgrades
-
 # Install Python dependencies into the persistent venv without copying or
 # compiling the BlockSci source tree.
 COPY pip-all-requirements.txt /blocksci/pip-all-requirements.txt
