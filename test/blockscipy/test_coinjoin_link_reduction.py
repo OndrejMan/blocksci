@@ -34,6 +34,7 @@ def txids(transactions):
     return {str(tx.hash) for tx in transactions}
 
 
+@pytest.mark.btc
 def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinjoin_chain):
     test_dir = os.path.dirname(os.path.realpath(__file__))
     with open(os.path.join(test_dir, "../files/linked-coinjoin/btc/output.json")) as output_file:
@@ -42,8 +43,11 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinj
     first_txid = fixture_data["linked-joinmarket-first-tx"]
     second_txid = fixture_data["linked-joinmarket-second-tx"]
 
+    # The fixture's second CoinJoin spends five mix outputs from the first one.
+    # A linked result must still contain exactly the two distinct endpoints.
     linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
-    assert second_txid in txids(linked)
+    assert len(linked) == 2
+    assert txids(linked) == {first_txid, second_txid}
 
     linked_without_false_positive = linked_coinjoin_chain.compute_anonymity_degradation(
         0,
