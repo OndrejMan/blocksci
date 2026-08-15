@@ -107,6 +107,14 @@ option(WITH_ZSTD "" OFF)
 
 # rocksdb
 
+# RocksDB otherwise defaults to -march=native. When the parent explicitly
+# requests a portable build, set its option before adding the subproject.
+# Otherwise leave RocksDB's default or an explicitly supplied -DPORTABLE value
+# untouched.
+if(BLOCKSCI_PORTABLE_BUILD)
+    set(PORTABLE ON CACHE BOOL "Build RocksDB with portable CPU instructions" FORCE)
+endif()
+
 add_subdirectory(rocksdb EXCLUDE_FROM_ALL)
 
 add_library(rocksdb_headers INTERFACE)
