@@ -7,6 +7,7 @@
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
+#include <cmath>
 #include <optional>
 #include <queue>
 #include <stdexcept>
@@ -33,6 +34,15 @@ std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) 
         return std::nullopt;
     }
     return static_cast<uint64_t>(minInputCount.value());
+}
+
+void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) {
+    if (minBaseFee < 0) {
+        throw std::invalid_argument("min_base_fee must be non-negative");
+    }
+    if (!std::isfinite(percentageFee) || percentageFee < 0.0 || percentageFee > 1.0) {
+        throw std::invalid_argument("percentage_fee must be finite and between 0 and 1");
+    }
 }
 
 std::unordered_set<Transaction> findLinkedCjTxes(
@@ -330,6 +340,43 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "Filter all transaction-level CoinJoin heuristic matches without linked-transaction reduction",
             pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"),
             pybind11::arg("min_input_count") = std::nullopt)
+        .def(
+            "scan_coinjoins_by_subset_matching",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,
+               double percentageFee, size_t maxDepth) {
+                if (detector != "possible" && detector != "definite") {
+                    throw std::invalid_argument("detector must be \"possible\" or \"definite\", got: " + detector);
+                }
+                validateSubsetMatchingParameters(minBaseFee, percentageFee);
+                bool usePossible = detector == "possible";
+
+                std::vector<Transaction> detected;
+                std::vector<Transaction> skipped;
+                {
+                    py::gil_scoped_release release;
+                    for (auto block : chain[{start, stop}]) {
+                        for (auto tx : block) {
+                            auto result =
+                                usePossible
+                                    ? blocksci::heuristics::isPossibleCoinjoin(tx, minBaseFee, percentageFee, maxDepth)
+                                    : blocksci::heuristics::isCoinjoinExtra(tx, minBaseFee, percentageFee, maxDepth);
+
+                            if (result == blocksci::heuristics::CoinJoinResult::True) {
+                                detected.push_back(tx);
+                            } else if (result == blocksci::heuristics::CoinJoinResult::Timeout) {
+                                skipped.push_back(tx);
+                            }
+                        }
+                    }
+                }
+                return py::make_tuple(detected, skipped);
+            },
+            "Scan the range with the input-subset-matching coinjoin detector. Not protocol-specific: the "
+            "\"possible\" and \"definite\" detectors match any transaction with equal-value outputs fundable by "
+            "distinct input subsets. Returns (detected, skipped); skipped are searches that hit max_depth.",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("detector") = "definite",
+            pybind11::arg("min_base_fee") = 5000, pybind11::arg("percentage_fee") = 0.00004,
+            pybind11::arg("max_depth") = 200000)
         .def(
             "find_hw_sw_coinjoins",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop) {
