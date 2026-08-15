@@ -43,7 +43,4 @@ std::string encode(const std::string& hrp, const std::vector<uint8_t>& values,
 /** Decode a Bech32 or Bech32m string and return the checksum encoding used. */
 std::tuple<std::string, std::vector<uint8_t>, Encoding> decodeWithEncoding(const std::string& str);
 
-/** Decode a Bech32 string. Returns (hrp, data). Empty hrp means failure. */
-std::pair<std::string, std::vector<uint8_t> > decode(const std::string& str);
-
 } // namespace bech32
