@@ -8,7 +8,9 @@ cd /mnt/blocksci
 
 (mkdir -p build && \
     cd build && \
-    CC=gcc-7 CXX=g++-7 cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    CC=gcc-7 CXX=g++-7 cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBLOCKSCI_PORTABLE_BUILD="${BLOCKSCI_PORTABLE_BUILD:-OFF}" .. && \
     make -j$THREADS && \
     make install) || exit 1
 
