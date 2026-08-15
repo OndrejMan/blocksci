@@ -317,6 +317,20 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "Filter coinjoin transactions", pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("coinjoin_type"), pybind11::arg("min_input_count") = std::nullopt)
         .def(
+            "filter_coinjoin_txes_raw",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
+               std::optional<int> minInputCount) {
+                auto validatedMinInputCount = validateMinInputCount(minInputCount);
+                py::gil_scoped_release release;
+                return chain[{start, stop}].filter([&](const Transaction &tx) {
+                    return blocksci::heuristics::isCoinjoinOfGivenType(
+                        tx, coinjoinType, std::nullopt, validatedMinInputCount);
+                });
+            },
+            "Filter all transaction-level CoinJoin heuristic matches without linked-transaction reduction",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"),
+            pybind11::arg("min_input_count") = std::nullopt)
+        .def(
             "find_hw_sw_coinjoins",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop) {
                 return chain[{start, stop}].filter([](const Transaction &tx) {
