@@ -3,6 +3,7 @@
 #include <blocksci/address/address.hpp>
 #include <blocksci/chain/access.hpp>
 #include <blocksci/chain/blockchain.hpp>
+#include <blocksci/chain/coinjoin_link_reduction.hpp>
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
@@ -57,16 +58,8 @@ std::unordered_set<Transaction> findLinkedCjTxes(
         txSet.insert(tx);
     }
 
-    std::unordered_set<Transaction> result;
-    for (const auto &tx : txSet) {
-        for (const auto &input : tx.inputs()) {
-            if (txSet.find(input.getSpentTx()) != txSet.end()) {
-                result.insert(tx);
-                break;
-            }
-        }
-    }
-    return result;
+    return detail::findLinkedCoinjoinTransactions(
+        txSet, [](const auto &tx) { return tx.inputs(); }, [](const auto &input) { return input.getSpentTx(); });
 }
 
 using LevelType = uint32_t;
