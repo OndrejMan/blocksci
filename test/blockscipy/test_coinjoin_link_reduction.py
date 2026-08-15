@@ -61,6 +61,25 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinj
 
 
 @pytest.mark.btc
+def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_chain):
+    linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
+    first_coinjoin_height = min(tx.block.height for tx in linked)
+
+    # The first fixture CoinJoin is linked only by the second one, in the next
+    # block. A single-block range therefore has a heuristic match but no
+    # in-range CoinJoin-to-CoinJoin link to reduce to.
+    raw = linked_coinjoin_chain.filter_coinjoin_txes_raw(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
+    )
+    reduced = linked_coinjoin_chain.filter_coinjoin_txes(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
+    )
+
+    assert len(raw) == 1
+    assert not reduced
+
+
+@pytest.mark.btc
 def test_linked_coinjoin_filter_rejects_negative_min_input_count(linked_coinjoin_chain):
     with pytest.raises(ValueError, match="min_input_count must be non-negative"):
         linked_coinjoin_chain.filter_coinjoin_txes(
