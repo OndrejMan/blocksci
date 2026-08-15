@@ -2,9 +2,10 @@
 
 THREADS=1
 SKIP_JUPYTER=0
+PORTABLE_BUILD=OFF
 
 usage() {
-    echo "Usage: $0 [--threads=N] [--skip-jupyter]" >&2
+    echo "Usage: $0 [--threads=N] [--skip-jupyter] [--portable-build]" >&2
     exit 1
 }
 
@@ -12,6 +13,7 @@ for arg in "$@"; do
     case "$arg" in
         --threads=*) THREADS="${arg#--threads=}" ;;
         --skip-jupyter) SKIP_JUPYTER=1 ;;
+        --portable-build) PORTABLE_BUILD=ON ;;
         *) usage ;;
     esac
 done
@@ -26,7 +28,9 @@ cd /mnt/blocksci
 
 (mkdir -p build && \
     cd build && \
-    CC=gcc-7 CXX=g++-7 cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    CC=gcc-7 CXX=g++-7 cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBLOCKSCI_PORTABLE_BUILD="$PORTABLE_BUILD" .. && \
     make -j$THREADS && \
     make install) || exit 1
 
