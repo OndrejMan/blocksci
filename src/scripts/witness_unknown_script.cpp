@@ -7,6 +7,8 @@
 
 #include <blocksci/scripts/witness_unknown_script.hpp>
 
+#include "bitcoin_segwit_addr.hpp"
+
 #include <internal/address_info.hpp>
 #include <internal/data_access.hpp>
 #include <internal/script_access.hpp>
@@ -15,6 +17,7 @@
 #include <range/v3/view/split.hpp>
 
 #include <sstream>
+#include <vector>
 
 namespace blocksci {
 
@@ -39,6 +42,13 @@ namespace blocksci {
     std::string ScriptAddress<AddressType::WITNESS_UNKNOWN>::getWitnessScriptString() const {
         return ScriptToAsmStr(getWitnessScript());
     }
+
+    std::string ScriptAddress<AddressType::WITNESS_UNKNOWN>::addressString() const {
+        std::vector<uint8_t> witprog;
+        auto witnessScript = getWitnessScript();
+        witprog.insert(witprog.end(), witnessScript.begin(), witnessScript.end());
+        return segwit_addr::encode(getAccess().config.chainConfig, witnessVersion(), witprog);
+    }
     
     std::string ScriptAddress<AddressType::WITNESS_UNKNOWN>::toString() const {
         std::stringstream ss;
@@ -48,7 +58,7 @@ namespace blocksci {
     
     std::string ScriptAddress<AddressType::WITNESS_UNKNOWN>::toPrettyString() const {
         std::stringstream ss;
-        ss << "WitnessUnknownScript()";
+        ss << "WitnessUnknownAddress(" << addressString() << ")";
         return ss.str();
     }
 } // namespace blocksci
