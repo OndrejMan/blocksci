@@ -53,6 +53,11 @@ bool convertbits(segwit_data& out, const segwit_data& in) {
     return true;
 }
 
+/** Pick the bech32 variant a witness version has to be encoded with. */
+bech32::Encoding encodingForWitnessVersion(int witver) {
+    return witver == 0 ? bech32::Encoding::BECH32 : bech32::Encoding::BECH32M;
+}
+
 /** Witness versions are pushed as OP_0 through OP_16, so nothing above 16 exists. */
 bool isKnownWitnessVersion(int witver) {
     return witver >= 0 && witver <= 16;
@@ -69,22 +74,29 @@ bool hasValidVersionZeroLength(int witver, const segwit_data& program) {
     return program.size() == 20 || program.size() == 32;
 }
 
+/** Version 0 is checksummed with Bech32, every later version with Bech32m. */
+bool usesRequiredEncoding(int witver, bech32::Encoding encoding) {
+    return encoding == encodingForWitnessVersion(witver);
+}
+
 } // namespace
 
 namespace segwit_addr {
 
 /** Decode a SegWit address. */
 std::pair<int, segwit_data> decode(const std::string& hrp, const std::string& addr) {
-    const std::pair<std::string, segwit_data> dec = bech32::decode(addr);
-    const std::string &decoded_hrp = dec.first;
-    const segwit_data &decoded_data = dec.second;
+    auto dec = bech32::decodeWithEncoding(addr);
+    const auto &decoded_hrp = std::get<0>(dec);
+    const auto &decoded_data = std::get<1>(dec);
+    const auto encoding = std::get<2>(dec);
     if (decoded_hrp != hrp || decoded_data.size() < 1) return std::make_pair(-1, segwit_data());
     segwit_data program;
     const int witness_version = decoded_data[0];
     if (!convertbits<5, 8, false>(program, segwit_data(decoded_data.begin() + 1, decoded_data.end())) ||
         !isKnownWitnessVersion(witness_version) ||
         !hasValidProgramLength(program) ||
-        !hasValidVersionZeroLength(witness_version, program)) {
+        !hasValidVersionZeroLength(witness_version, program) ||
+        !usesRequiredEncoding(witness_version, encoding)) {
         return std::make_pair(-1, segwit_data());
     }
     return std::make_pair(witness_version, program);
@@ -95,7 +107,7 @@ std::string encode(const std::string& hrp, int witver, const segwit_data& witpro
     segwit_data enc;
     enc.push_back(static_cast<unsigned char>(witver));
     convertbits<8, 5, true>(enc, witprog);
-    std::string ret = bech32::encode(hrp, enc);
+    std::string ret = bech32::encode(hrp, enc, encodingForWitnessVersion(witver));
     if (decode(hrp, ret).first == -1) return "";
     return ret;
 }
