@@ -3,6 +3,9 @@ import subprocess
 import os
 
 
+CHAIN_MARKERS = {"btc", "bch", "ltc"}
+
+
 def pytest_addoption(parser):
     parser.addoption("--btc", action="store_true", help="Run tests for Bitcoin")
     parser.addoption("--bch", action="store_true", help="Run tests for Bitcoin Cash")
@@ -24,12 +27,13 @@ def pytest_generate_tests(metafunc):
 
 
 def pytest_runtest_call(item):
-    markers = [x.name for x in item.iter_markers()]
-    if markers:
-        if item.funcargs["chain_name"] not in markers:
-            pytest.skip(
-                "Skipping test for chain {}".format(item.funcargs["chain_name"])
-            )
+    chain_markers = {marker.name for marker in item.iter_markers()} & CHAIN_MARKERS
+    if chain_markers:
+        # chain_name is parametrized for every test, but it only shows up in
+        # funcargs for tests that request a chain fixture.
+        chain_name = item.callspec.params["chain_name"]
+        if chain_name not in chain_markers:
+            pytest.skip("Skipping test for chain {}".format(chain_name))
 
 
 @pytest.fixture(scope="session")
