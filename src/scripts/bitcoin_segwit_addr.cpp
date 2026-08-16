@@ -53,21 +53,41 @@ bool convertbits(segwit_data& out, const segwit_data& in) {
     return true;
 }
 
+/** Witness versions are pushed as OP_0 through OP_16, so nothing above 16 exists. */
+bool isKnownWitnessVersion(int witver) {
+    return witver >= 0 && witver <= 16;
+}
+
+/** Witness programs are 2 to 40 bytes long. */
+bool hasValidProgramLength(const segwit_data& program) {
+    return program.size() >= 2 && program.size() <= 40;
+}
+
+/** Version 0 defines exactly two programs: 20 bytes for P2WPKH and 32 bytes for P2WSH. */
+bool hasValidVersionZeroLength(int witver, const segwit_data& program) {
+    if (witver != 0) return true;
+    return program.size() == 20 || program.size() == 32;
+}
+
 } // namespace
 
 namespace segwit_addr {
 
 /** Decode a SegWit address. */
 std::pair<int, segwit_data> decode(const std::string& hrp, const std::string& addr) {
-    std::pair<std::string, segwit_data> dec = bech32::decode(addr);
-    if (dec.first != hrp || dec.second.size() < 1) return std::make_pair(-1, segwit_data());
-    segwit_data conv;
-    if (!convertbits<5, 8, false>(conv, segwit_data(dec.second.begin() + 1, dec.second.end())) ||
-        conv.size() < 2 || conv.size() > 40 || dec.second[0] > 16 || (dec.second[0] == 0 &&
-        conv.size() != 20 && conv.size() != 32)) {
+    const std::pair<std::string, segwit_data> dec = bech32::decode(addr);
+    const std::string &decoded_hrp = dec.first;
+    const segwit_data &decoded_data = dec.second;
+    if (decoded_hrp != hrp || decoded_data.size() < 1) return std::make_pair(-1, segwit_data());
+    segwit_data program;
+    const int witness_version = decoded_data[0];
+    if (!convertbits<5, 8, false>(program, segwit_data(decoded_data.begin() + 1, decoded_data.end())) ||
+        !isKnownWitnessVersion(witness_version) ||
+        !hasValidProgramLength(program) ||
+        !hasValidVersionZeroLength(witness_version, program)) {
         return std::make_pair(-1, segwit_data());
     }
-    return std::make_pair(dec.second[0], conv);
+    return std::make_pair(witness_version, program);
 }
 
 /** Encode a SegWit address. */
@@ -79,14 +99,9 @@ std::string encode(const std::string& hrp, int witver, const segwit_data& witpro
     if (decode(hrp, ret).first == -1) return "";
     return ret;
 }
-    
+
 std::string encode(const blocksci::ChainConfiguration &config, int witver, const segwit_data& witprog) {
-    segwit_data enc;
-    enc.push_back(static_cast<unsigned char>(witver));
-    convertbits<8, 5, true>(enc, witprog);
-    std::string ret = bech32::encode(config.segwitPrefix, enc);
-    if (decode(config.segwitPrefix, ret).first == -1) return "";
-    return ret;
+    return encode(config.segwitPrefix, witver, witprog);
 }
 
 } // namespace segwit_addr
