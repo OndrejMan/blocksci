@@ -8,6 +8,7 @@
 #include <blocksci/scripts/script_range.hpp>
 #include <optional>
 #include <queue>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 
@@ -23,12 +24,24 @@ using namespace blocksci;
 
 using json = nlohmann::json;
 
+std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) {
+    if (minInputCount.has_value() && minInputCount.value() < 0) {
+        throw std::invalid_argument("min_input_count must be non-negative");
+    }
+    if (!minInputCount.has_value()) {
+        return std::nullopt;
+    }
+    return static_cast<uint64_t>(minInputCount.value());
+}
+
 std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto txes = chain[{start, stop}].filter(
-        [&](const Transaction &tx) { return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype); });
+    auto validatedMinInputCount = validateMinInputCount(minInputCount);
+    auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
+        return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype, validatedMinInputCount);
+    });
 
     if (txes.empty()) {
         return {};
@@ -42,7 +55,6 @@ std::unordered_set<Transaction> findLinkedCjTxes(
 
     std::unordered_set<Transaction> result;
     result.insert(txes[0]);
-
     for (const auto &tx : txSet) {
         if (falsePositives.has_value() &&
             falsePositives.value().find(tx.getHash().GetHex()) != falsePositives.value().end()) {
@@ -51,15 +63,6 @@ std::unordered_set<Transaction> findLinkedCjTxes(
         for (const auto &input : tx.inputs()) {
             if (txSet.find(input.getSpentTx()) != txSet.end()) {
                 result.insert(tx);
-                if (minInputCount.has_value()) {
-                    for (const auto &output : tx.outputs()) {
-                        if (!output.isSpent()) continue;
-                        if (blocksci::heuristics::isCoinjoinOfGivenType(output.getSpendingTx().value(), coinjoinType,
-                                                                        subtype, minInputCount)) {
-                            result.insert(tx);
-                        }
-                    }
-                }
                 break;
             }
         }
