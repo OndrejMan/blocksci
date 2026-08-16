@@ -27,14 +27,19 @@ namespace blocksci {
         auto firstTx = firstTxIndex();
         auto totalTxCount = lastTx - firstTx;
         uint32_t segmentSize = totalTxCount / segmentCount;
-        
-        
+
         auto it = begin();
         auto chainEnd = end();
         while(lastTx - (*it).firstTxIndex() > segmentSize) {
             auto endIt = std::lower_bound(it, chainEnd, (*it).firstTxIndex() + segmentSize, [](const Block &block, uint32_t txNum) {
                 return block.firstTxIndex() < txNum;
             });
+            // No block starts at or after the requested transaction index. Dereferencing
+            // chainEnd here would be undefined behavior and would leave the loop unable
+            // to advance, so stop and let the trailing segment cover the remainder.
+            if (endIt == chainEnd) {
+                break;
+            }
             auto startBlock = *it;
             auto endBlock = *endIt;
             segments.emplace_back(Slice{startBlock.height(), endBlock.height()}, access);
