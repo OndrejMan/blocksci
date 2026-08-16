@@ -54,3 +54,14 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinj
         falseCoinjoins={first_txid},
     )
     assert txids(linked_without_false_positive) == set()
+
+
+@pytest.mark.btc
+def test_linked_coinjoin_filter_rejects_negative_min_input_count(linked_coinjoin_chain):
+    with pytest.raises(ValueError, match="min_input_count must be non-negative"):
+        linked_coinjoin_chain.filter_coinjoin_txes(
+            0,
+            len(linked_coinjoin_chain),
+            "wasabi2",
+            min_input_count=-1,
+        )
