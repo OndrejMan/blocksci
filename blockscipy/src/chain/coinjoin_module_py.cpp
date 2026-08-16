@@ -50,16 +50,15 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     // filter txes which are not connected to any other coinjoin tx
     std::unordered_set<Transaction> txSet;
     for (const auto &tx : txes) {
-        txSet.insert(tx);
-    }
-
-    std::unordered_set<Transaction> result;
-    result.insert(txes[0]);
-    for (const auto &tx : txSet) {
         if (falsePositives.has_value() &&
             falsePositives.value().find(tx.getHash().GetHex()) != falsePositives.value().end()) {
             continue;
         }
+        txSet.insert(tx);
+    }
+
+    std::unordered_set<Transaction> result;
+    for (const auto &tx : txSet) {
         for (const auto &input : tx.inputs()) {
             if (txSet.find(input.getSpentTx()) != txSet.end()) {
                 result.insert(tx);
