@@ -1,0 +1,94 @@
+name: Resolve dependency image
+description: Reuse a verified dependency image or select the tag to build.
+
+inputs:
+  base-image:
+    description: Dependency image name without a tag.
+    required: true
+  base-tag:
+    description: Stable input-derived tag to inspect.
+    required: true
+  fallback-tag:
+    description: Tag to build when the stable image is absent; empty builds in-file.
+    required: false
+    default: ""
+  force-rebuild:
+    description: Select the fallback tag without inspecting the stable image.
+    required: false
+    default: "false"
+
+outputs:
+  tag:
+    description: Stable tag when reused, otherwise the selected build tag.
+    value: ${{ steps.resolve.outputs.tag }}
+  needs_build:
+    description: Whether the dependency image must be built in this run.
+    value: ${{ steps.resolve.outputs.needs_build }}
+  build_arg:
+    description: DEPS_IMAGE build argument, or empty for the in-file stage.
+    value: ${{ steps.resolve.outputs.build_arg }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        BASE_IMAGE: ${{ inputs.base-image }}
+        BASE_TAG: ${{ inputs.base-tag }}
+        FALLBACK_TAG: ${{ inputs.fallback-tag }}
+        FORCE_REBUILD: ${{ inputs.force-rebuild }}
+      run: |
+        set -euo pipefail
+
+        reuse() {
+          echo "tag=${BASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          echo "build_arg=DEPS_IMAGE=${BASE_IMAGE}:${BASE_TAG}" >> "$GITHUB_OUTPUT"
+        }
+
+        rebuild() {
+          if [ -n "$FALLBACK_TAG" ]; then
+            echo "tag=${FALLBACK_TAG}" >> "$GITHUB_OUTPUT"
+            echo "build_arg=DEPS_IMAGE=${BASE_IMAGE}:${FALLBACK_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${BASE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "build_arg=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "needs_build=true" >> "$GITHUB_OUTPUT"
+        }
+
+        case "$FORCE_REBUILD" in
+          true)
+            if [ -z "$FALLBACK_TAG" ]; then
+              echo "::error::force-rebuild requires a fallback-tag"
+              exit 1
+            fi
+            echo "Forced dependency rebuild requested."
+            rebuild
+            exit 0
+            ;;
+          false|"")
+            ;;
+          *)
+            echo "::error::force-rebuild must be true or false, got: ${FORCE_REBUILD}"
+            exit 1
+            ;;
+        esac
+
+        if inspect_output="$(docker buildx imagetools inspect "${BASE_IMAGE}:${BASE_TAG}" 2>&1)"; then
+          echo "Reusing verified dependency image ${BASE_IMAGE}:${BASE_TAG}"
+          reuse
+        elif printf '%s\n' "$inspect_output" |
+            grep -qiE 'not found|manifest unknown|no such manifest|name unknown'; then
+          if [ -n "$FALLBACK_TAG" ]; then
+            echo "No dependency image under ${BASE_TAG}; building ${FALLBACK_TAG} in this run."
+          else
+            echo "No published dependency image for ${BASE_TAG}; building it in-file."
+          fi
+          rebuild
+        else
+          echo "::error::Could not query ${BASE_IMAGE}:${BASE_TAG}"
+          printf '%s\n' "$inspect_output" >&2
+          exit 1
+        fi
