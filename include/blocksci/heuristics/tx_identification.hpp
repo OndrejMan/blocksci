@@ -52,12 +52,13 @@ namespace blocksci {
         /**
          * Wasabi 2 CoinJoin detection, ported from Dumplings.
          * 2 addtional checks added:
-         *  1. After June 30, 2024, lower input limit to 40 to account for emerging post-zksnacks coordinators
+         *  1. From block 850237 (July 1, 2024) the minimum input count drops from 50 to 20 to account for
+         *     emerging post-zkSNACKs coordinators.
          *  2. We require at least 5 different input and 5 different output addresses in the transaction
          *
          * @param tx The transaction to check
          * @param inputCount if provided, then the transaction must have at least this many inputs to be considered
-         *                a Wasabi 2 CoinJoin. It overrides the height/test-mode default minimum.
+         *                a Wasabi 2 CoinJoin. Used for collecting transactions around a specific timeframe.
          *
          * @return true if the transaction is a Wasabi 2 CoinJoin, false otherwise
          */
