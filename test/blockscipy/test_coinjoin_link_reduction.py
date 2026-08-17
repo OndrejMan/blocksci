@@ -1,33 +1,6 @@
 import json
-import os
-import subprocess
 
 import pytest
-
-
-@pytest.fixture(scope="session")
-def linked_coinjoin_chain(tmpdir_factory):
-    chain_dir = str(tmpdir_factory.mktemp("linked_coinjoin"))
-    test_dir = os.path.dirname(os.path.realpath(__file__))
-    fixture_dir = os.path.join(test_dir, "../files/linked-coinjoin/btc/regtest")
-    config_path = os.path.join(chain_dir, "config.json")
-
-    subprocess.run(
-        [
-            "blocksci_parser",
-            config_path,
-            "generate-config",
-            "bitcoin_regtest",
-            chain_dir,
-            "--disk",
-            fixture_dir,
-        ],
-        check=True,
-    )
-    subprocess.run(["blocksci_parser", config_path, "update"], check=True)
-
-    import blocksci
-    return blocksci.Blockchain(config_path)
 
 
 def txids(transactions):
@@ -57,13 +30,11 @@ def test_regtest_config_disables_coinjoin_height_thresholds(linked_coinjoin_chai
 
 
 @pytest.mark.btc
-def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinjoin_chain):
-    test_dir = os.path.dirname(os.path.realpath(__file__))
-    with open(os.path.join(test_dir, "../files/linked-coinjoin/btc/output.json")) as output_file:
-        fixture_data = json.load(output_file)
-
-    first_txid = fixture_data["linked-joinmarket-first-tx"]
-    second_txid = fixture_data["linked-joinmarket-second-tx"]
+def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
+    linked_coinjoin_chain, linked_coinjoin_data
+):
+    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
+    second_txid = linked_coinjoin_data["linked-joinmarket-second-tx"]
 
     # The fixture's second CoinJoin spends five mix outputs from the first one.
     # A linked result must still contain exactly the two distinct endpoints.
