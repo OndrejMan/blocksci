@@ -83,3 +83,44 @@ def json_data(chain_name):
 
     with open("../files/{}/output.json".format(chain_name), "r") as f:
         return json.load(f)
+
+
+@pytest.fixture(scope="session")
+def linked_coinjoin_chain(tmpdir_factory):
+    """A regtest chain whose CoinJoins are recognised by the JoinMarket detector.
+
+    The main regtest fixture cannot be used for protocol detection: every
+    detector except JoinMarket is gated on mainnet block heights, and its
+    coinjoin motif has too few equal outputs for JoinMarket to fire.
+    """
+    chain_dir = str(tmpdir_factory.mktemp("linked_coinjoin"))
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    fixture_dir = os.path.join(self_dir, "../files/linked-coinjoin/btc/regtest")
+    config_path = os.path.join(chain_dir, "config.json")
+
+    subprocess.run(
+        [
+            "blocksci_parser",
+            config_path,
+            "generate-config",
+            "bitcoin_regtest",
+            chain_dir,
+            "--disk",
+            fixture_dir,
+        ],
+        check=True,
+    )
+    subprocess.run(["blocksci_parser", config_path, "update"], check=True)
+
+    import blocksci
+    return blocksci.Blockchain(config_path)
+
+
+@pytest.fixture
+def linked_coinjoin_data():
+    import json
+
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(self_dir, "../files/linked-coinjoin/btc/output.json")
+    with open(path, "r") as f:
+        return json.load(f)
