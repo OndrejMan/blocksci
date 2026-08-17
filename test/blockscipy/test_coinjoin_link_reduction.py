@@ -34,6 +34,28 @@ def txids(transactions):
     return {str(tx.hash) for tx in transactions}
 
 
+# Every protocol detector except JoinMarket is gated on a first-seen block
+# height. Regtest chains sit far below the mainnet values, so the thresholds
+# have to be zeroed in the chain configuration or detection can never fire on
+# emulated data.
+COINJOIN_THRESHOLDS = [
+    "FirstSamouraiBlock",
+    "FirstWasabiBlock",
+    "FirstWasabi2Block",
+    "FirstWasabiNoCoordAddressBlock",
+    "FirstAshigaruBlock",
+]
+
+
+@pytest.mark.btc
+def test_regtest_config_disables_coinjoin_height_thresholds(linked_coinjoin_chain):
+    with open(linked_coinjoin_chain.config_location) as config_file:
+        coinjoin_config = json.load(config_file)["chainConfig"]["coinJoinConfiguration"]
+
+    for threshold in COINJOIN_THRESHOLDS:
+        assert coinjoin_config[threshold] == 0, threshold
+
+
 @pytest.mark.btc
 def test_linked_coinjoin_filter_excludes_false_positive_predecessor(linked_coinjoin_chain):
     test_dir = os.path.dirname(os.path.realpath(__file__))
