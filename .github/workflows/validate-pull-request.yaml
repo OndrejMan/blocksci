@@ -1,0 +1,110 @@
+name: Validate pull request
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Read-only pull of the published dependency image, so a pull request never
+  # rebuilds the toolchain that master already built.
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  # Must match docker-images.yaml: the two workflows have to derive the same
+  # dependency tag or a pull request will never find the published image.
+  DEPENDENCY_KEY_VERSION: "1"
+
+jobs:
+  build:
+    # CI_RUNNER may contain a JSON array of self-hosted runner labels.
+    # When it is unset, use GitHub-hosted Ubuntu.
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Test dependency image tagging
+        shell: bash
+        run: bash .github/scripts/test-dependency-image-tag.sh
+
+      - name: Select target platforms
+        id: platforms
+        uses: ./.github/actions/select-platforms
+        with:
+          build-x86: ${{ vars.BUILD_X86 }}
+          build-arm: ${{ vars.BUILD_ARM }}
+
+      - name: Set up QEMU
+        if: ${{ contains(steps.platforms.outputs.platforms, 'arm64') }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set dependency image name
+        id: image_name
+        shell: bash
+        run: echo "base_image=${REGISTRY}/${GITHUB_REPOSITORY,,}-cj" >> "$GITHUB_OUTPUT"
+
+      - name: Compute dependency image tag
+        id: dependency_key
+        uses: ./.github/actions/compute-dependency-key
+        with:
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          key-version: ${{ env.DEPENDENCY_KEY_VERSION }}
+
+      # A pull request from a fork gets a read-only token that cannot reach the
+      # package, so there is nothing to log into and nothing to pin. It still
+      # builds and tests below -- the dependencies stage is simply built in-run.
+      - name: Log in to GHCR
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pin the published dependency image
+        id: dependency_image
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: ./.github/actions/resolve-dependency-image
+        with:
+          base-image: ${{ steps.image_name.outputs.base_image }}
+          base-tag: ${{ steps.dependency_key.outputs.base_tag }}
+
+      - name: Build and test multi-arch validation image
+        uses: docker/build-push-action@v7
+        env:
+          # Preserve complete BuildKit output, including the subprocess that
+          # fails inside the image build.
+          BUILDKIT_PROGRESS: plain
+        with:
+          context: .
+          file: Dockerfile
+          # `test` derives from the shipped `complete` stage and runs the suites
+          # for every target platform. Nothing is pushed, so running them inside
+          # the build is the only way to exercise them under QEMU -- and because
+          # `test` is a descendant, the compile still happens exactly once and
+          # the test artifacts stay out of what master publishes.
+          target: test
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          push: false
+          provenance: false
+          # The pull request's own scope first, so a second push reuses what the
+          # previous one compiled; master's `complete` scope second, so the first
+          # push to a pull request still starts from the published layers.
+          cache-from: |
+            type=gha,scope=pr-${{ github.event.pull_request.number }}
+            type=gha,scope=complete-${{ steps.dependency_key.outputs.base_tag }}
+          cache-to: type=gha,mode=max,scope=pr-${{ github.event.pull_request.number }}
+          build-args: |
+            NTHREADS=${{ vars.BLOCKSCI_NTHREADS || '1' }}
+            ${{ steps.dependency_image.outputs.build_arg }}
