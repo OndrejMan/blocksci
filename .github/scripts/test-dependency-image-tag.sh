@@ -58,4 +58,24 @@ if compute_tag "$platforms" false 1 >/dev/null 2>&1; then
     exit 1
 fi
 
+# The publishing workflow and pull-request validation derive this tag
+# independently and must agree on the key version, or a pull request stops
+# finding the image master published and silently rebuilds the toolchain on
+# every run. Nothing else enforces it, so assert it here -- this script runs in
+# pull-request validation.
+workflows="${repository_root}/.github/workflows"
+key_version_lines="$(grep -hoE '^[[:space:]]*DEPENDENCY_KEY_VERSION:[[:space:]]*"?[0-9]+"?' \
+    "${workflows}/docker-images.yaml" "${workflows}/validate-pull-request.yaml")"
+declared="$(printf '%s\n' "$key_version_lines" | grep -c .)"
+if [ "$declared" -ne 2 ]; then
+    echo "Expected both workflows to declare DEPENDENCY_KEY_VERSION; found $declared." >&2
+    exit 1
+fi
+distinct="$(printf '%s\n' "$key_version_lines" | grep -oE '[0-9]+' | sort -u | grep -c .)"
+if [ "$distinct" -ne 1 ]; then
+    echo "The workflows disagree on DEPENDENCY_KEY_VERSION:" >&2
+    printf '%s\n' "$key_version_lines" >&2
+    exit 1
+fi
+
 echo "dependency image tag tests passed"
