@@ -3,6 +3,10 @@
 This is a fork of the original BlockSci repository with extensions for the analysis of CoinJoin transactions.
 This fork is a part of the [Master's thesis](https://is.muni.cz/th/qrvgf/Thesis.pdf) developed for CRoCS laboratory at Masaryk University, Brno, Czech Republic and use for [ESORICS'25 publication](https://crocs.fi.muni.cz/public/papers/coinjoins_esorics25).
 
+## CLion development with Docker
+
+See [CLION.md](CLION.md) for developing BlockSci in CLion with a Docker toolchain.
+
 ## Quickstart
 This version of BlockSci is intended to be run in Docker. The Docker image pins Python 3.8.20 alongside many outdated libraries. If you **really** want to run it on your machine, you can try to follow the installation
 instructions from the original repository, however, unless you are running Ubuntu 20.04, you will most likely encounter issues.
@@ -15,7 +19,7 @@ To run BlockSci in Docker, the following steps are required:
 1. Clone this repository
     1. You also need to clone with submodules. For that, either use `--recurse-submodules` while cloning, or, in the cloned repository, follow with `git submodule init` and `git submodule update --recursive`.
 2. Install [Docker](https://docs.docker.com/get-docker/)
-3. Build the dependency image by running `docker build --target dependencies -t blocksci-cj .` in the root of the repository. This only installs the toolchain and libraries; it does not compile BlockSci.
+3. Build the dependency image by running `docker build --target dependencies -t blocksci-dev:latest .` in the root of the repository. This only installs the toolchain and libraries; it does not compile BlockSci.
     1. We use `uv` to speed up the `blockscipy` installation, since it takes a long time.
     2. Use `./build.sh --threads=<number>` to control how many threads are used by the later BlockSci compilation.
 
@@ -30,10 +34,10 @@ An example way to set up the mounts is as follows:
 To run the container with the mounted volumes, you can use the following command:
 
 ```bash
-docker run --name blocksci_container --replace -p <notebook port>:8888 -v <this repository folder>:/mnt/blocksci -v <bitcoin fullnode directory>:/mnt/data  -v <analysis volume>:/mnt/anal -it --entrypoint /bin/bash blocksci-cj:latest
+docker run --rm --name blocksci_container -p <notebook port>:8888 -v <this repository folder>:/mnt/blocksci -v <bitcoin fullnode directory>:/mnt/data  -v <analysis volume>:/mnt/anal -it --entrypoint /bin/bash blocksci-dev:latest
 ```
 
-The `--replace` flag is used to remove the container with the same name if it already exists. The `-p` flag is used to expose the Jupyter notebook on the specified port. The `-v` flag is used to mount the volumes. The `-it` flag is used to run the container in interactive mode. The `--entrypoint /bin/bash` flag is used to run the container in bash mode, so you can run the Jupyter notebook manually.
+The `--rm` flag removes the container when it exits. The `-p` flag is used to expose the Jupyter notebook on the specified port. The `-v` flag is used to mount the volumes. The `-it` flag is used to run the container in interactive mode. The `--entrypoint /bin/bash` flag is used to run the container in bash mode, so you can run the Jupyter notebook manually.
 
 Now, as we have everything mounted and we are connected to the container, we can run the "classic" BlockSci setup.
 
