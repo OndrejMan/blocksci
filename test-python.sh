@@ -3,4 +3,4 @@
 set -e
 
 cd /mnt/blocksci/test/blockscipy
-uv run pytest
+uv run --project /blocksci --locked pytest

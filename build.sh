@@ -38,14 +38,14 @@ cd /mnt/blocksci
 
 cd /mnt/blocksci
 
-uv pip install -r pip-all-requirements.txt || exit 1
+uv sync --project /blocksci --locked || exit 1
 
-# The Jupyter stack is pinned in pip-all-requirements.txt and therefore already
-# installed above. Only the nbextension assets need a separate configuration
+# The Jupyter stack is pinned in uv.lock and therefore already installed above.
+# Only the nbextension assets need a separate configuration
 # step, and it is best effort: jupyter-contrib-nbextensions targets Notebook 6.x
 # and may not apply to the pinned Notebook 7.x.
 if [ "$SKIP_JUPYTER" != "1" ]; then
-    uv run jupyter contrib nbextension install --user || \
+    uv run --project /blocksci --locked jupyter contrib nbextension install --user || \
         echo "warning: nbextension setup failed; notebooks will run without extensions"
 fi
 
@@ -64,5 +64,5 @@ mv build/compile_commands_merged.json build/compile_commands.json || exit 1
 
 if [ "$SKIP_JUPYTER" != "1" ]; then
     cd Notebooks || exit 1
-    uv run jupyter notebook --no-browser --ip="0.0.0.0" --allow-root || exit 1
+    uv run --project /blocksci --locked jupyter notebook --no-browser --ip="0.0.0.0" --allow-root || exit 1
 fi
