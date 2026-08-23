@@ -28,9 +28,8 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
 # sources are copied and compiled by the `complete` stage below.
 WORKDIR /blocksci
 
-# Install uv and add it to PATH
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# Install uv. Update the release tag here when a newer version is needed.
+COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
 
 # Install and pin Python 3.8.20
 RUN uv python install 3.8.20
@@ -41,10 +40,10 @@ ENV VIRTUAL_ENV="/blocksci/.venv"
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install Python dependencies into the persistent venv without copying or
-# compiling the BlockSci source tree.
-COPY pip-all-requirements.txt /blocksci/pip-all-requirements.txt
-RUN CC=gcc-7 CXX=g++-7 uv pip install -r /blocksci/pip-all-requirements.txt
+# Install the locked Python environment without copying or compiling the
+# BlockSci source tree.
+COPY pyproject.toml uv.lock /blocksci/
+RUN uv sync --locked
 
 # Set the default command for the container
 CMD ["/bin/bash"]

@@ -9,7 +9,8 @@ key_version="${4:-1}"
 run_id="${5:-}"
 
 dockerfile="${repository_root}/Dockerfile"
-requirements="${repository_root}/pip-all-requirements.txt"
+pyproject="${repository_root}/pyproject.toml"
+lockfile="${repository_root}/uv.lock"
 dockerignore="${repository_root}/.dockerignore"
 # Single quotes: the boundary is a literal Dockerfile line, not something
 # the shell should expand.
@@ -21,7 +22,7 @@ if [ "$boundary_count" -ne 1 ]; then
     exit 1
 fi
 
-for dependency_input in "$requirements" "$dockerignore"; do
+for dependency_input in "$pyproject" "$lockfile" "$dockerignore"; do
     if [ ! -f "$dependency_input" ]; then
         echo "Dependency image input is missing: $dependency_input" >&2
         exit 1
@@ -35,8 +36,10 @@ dependency_hash="$(
         # Exact-line match rather than a regex: the boundary now contains ${...},
         # which no regex dialect should have to interpret.
         awk -v boundary="$stage_boundary" '$0 == boundary { exit } { print }' "$dockerfile"
-        printf '\0pip-all-requirements.txt\0'
-        cat "$requirements"
+        printf '\0pyproject.toml\0'
+        cat "$pyproject"
+        printf '\0uv.lock\0'
+        cat "$lockfile"
         printf '\0.dockerignore\0'
         cat "$dockerignore"
         printf '\0platforms\0%s\0' "$platforms"

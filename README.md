@@ -69,7 +69,7 @@ docker build --target test -t blocksci-cj:test .
 ```
 
 Rebuild `blocksci-dev:latest` and then `blocksci-clion:latest` after changing
-the `Dockerfile` or `pip-all-requirements.txt`. The CLion image includes `make`
+the `Dockerfile`, `pyproject.toml`, or `uv.lock`. The CLion image includes `make`
 and `gdb` for building and debugging. Verify the CLion toolchain after a build with:
 
 ```bash

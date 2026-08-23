@@ -10,7 +10,8 @@ trap 'rm -rf "$test_root"' EXIT
 
 copy_inputs() {
     cp "${repository_root}/Dockerfile" "$test_root/Dockerfile"
-    cp "${repository_root}/pip-all-requirements.txt" "$test_root/pip-all-requirements.txt"
+    cp "${repository_root}/pyproject.toml" "$test_root/pyproject.toml"
+    cp "${repository_root}/uv.lock" "$test_root/uv.lock"
     cp "${repository_root}/.dockerignore" "$test_root/.dockerignore"
 }
 
@@ -45,7 +46,7 @@ awk '{ print } /^FROM ubuntu:20.04 AS dependencies$/ { print "# simulated depend
 assert_not_equal "$baseline" "$(compute_tag "$platforms" false 1)"
 
 copy_inputs
-printf '\n# simulated requirement change\n' >> "$test_root/pip-all-requirements.txt"
+printf '\n# simulated lockfile change\n' >> "$test_root/uv.lock"
 assert_not_equal "$baseline" "$(compute_tag "$platforms" false 1)"
 
 copy_inputs
