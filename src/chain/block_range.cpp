@@ -12,10 +12,15 @@
 #include <range/v3/view/filter.hpp>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace blocksci {
     
     std::vector<BlockRange> BlockRange::segment(unsigned int segmentCount) const {
+        if (segmentCount == 0) {
+            throw std::invalid_argument("BlockRange::segment requires at least one segment");
+        }
+
         std::vector<BlockRange> segments;
         
         if (size() < static_cast<BlockHeight>(segmentCount)) {
