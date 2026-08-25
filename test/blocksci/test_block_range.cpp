@@ -6,6 +6,7 @@
 #include "unit_test.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 
 namespace blocksci {
@@ -41,6 +42,10 @@ TEST_F(BlockRangeTest, SegmentCoversWholeChain) {
         EXPECT_EQ(expectedStart, chainStart + chain.size()) << "segment count " << segmentCount;
         EXPECT_EQ(txCount, chainTxCount) << "segment count " << segmentCount;
     }
+}
+
+TEST_F(BlockRangeTest, SegmentRejectsZeroCount) {
+    EXPECT_THROW(chain.segment(0), std::invalid_argument);
 }
 
 namespace {
