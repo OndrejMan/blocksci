@@ -51,8 +51,8 @@ void init_heuristics(py::module &m) {
             [](pybind11::object &) -> Proxy<bool> {
                 return lift(makeSimpleProxy<Transaction>(), heuristics::isCoinjoin);
             },
-            "Uses basic structural features to quickly decide whether this transaction might be a JoinMarket coinjoin "
-            "transaction")
+            "Returns whether this transaction matches any built-in CoinJoin detector, including Wasabi, Whirlpool, "
+            "Ashigaru, and JoinMarket")
         .def_property_readonly_static(
             "is_address_deanon",
             [](pybind11::object &) -> Proxy<bool> {
@@ -83,8 +83,9 @@ void init_heuristics(py::module &m) {
                 });
             },
             py::arg("min_base_fee"), py::arg("percentage_fee"), py::arg("max_depth") = 0,
-            "This function uses subset matching in order to determine whether this transaction is a JoinMarket "
-            "coinjoin. If maxDepth != 0, it limits the total number of possible subsets the algorithm will check.")
+            "Uses input-subset matching to identify a possible CoinJoin. This detector is not protocol-specific and "
+            "can match transactions from multiple CoinJoin protocols. If max_depth != 0, it limits the total number "
+            "of possible subsets the algorithm will check.")
         .def_static(
             "is_definite_coinjoin",
             [](int64_t minBaseFee, double percentageFee, size_t maxDepth) -> Proxy<int64_t> {
@@ -94,8 +95,9 @@ void init_heuristics(py::module &m) {
                 });
             },
             py::arg("min_base_fee"), py::arg("percentage_fee"), py::arg("max_depth") = 0,
-            "This function uses subset matching in order to determine whether this transaction is a JoinMarket "
-            "coinjoin. If maxDepth != 0, it limits the total number of possible subsets the algorithm will check.");
+            "Uses stricter input-subset matching to identify a definite CoinJoin. This detector is not "
+            "protocol-specific and can match transactions from multiple CoinJoin protocols. If max_depth != 0, it "
+            "limits the total number of possible subsets the algorithm will check.");
 
     cl.def_static("poison_tainted_outputs", heuristics::getPoisonTainted, py::arg("outputs"),
                   py::arg("max_block_height") = -1, py::arg("taint_fee") = true,
