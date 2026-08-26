@@ -99,6 +99,8 @@ namespace blocksci {
          *
          * @param tx The transaction to check
          * @param type The type of coinjoin to check for (wasabi1, wasabi2, whirlpool, ashigaru)
+         * @param subtype Optional denomination subtype. Ashigaru supports "25m" (0.25 BTC) and
+         *                "2.5m" (0.025 BTC).
          *
          * @return true if the transaction is a coinjoin of the given type, false otherwise
          */

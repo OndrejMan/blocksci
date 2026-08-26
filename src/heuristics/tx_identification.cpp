@@ -1260,10 +1260,12 @@ namespace blocksci {
                 if (!subtype.has_value()) {
                     return isAshigaru;
                 }
+                // Inputs may differ slightly from the pool denomination; the
+                // equal-valued outputs define the Ashigaru pool instead.
                 if (subtype.value() == "25m") {
-                    return tx.inputs()[0].getValue() == 25000000;
-                } else if (subtype.value() == "250k") {
-                    return tx.inputs()[0].getValue() == 250000;
+                    return tx.outputs()[0].getValue() == 25000000;
+                } else if (subtype.value() == "2.5m") {
+                    return tx.outputs()[0].getValue() == 2500000;
                 } else {
                     return false;
                 }
