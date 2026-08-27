@@ -530,7 +530,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     result["certain"] = {};
                     result["possible"] = {};
 
-                    std::queue<std::pair<const Transaction &, int>> bfsQueue;
+                    std::queue<std::pair<Transaction, int>> bfsQueue;
                     std::unordered_set<uint256> visited;
 
                     bfsQueue.push({tx, 0});
