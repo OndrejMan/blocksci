@@ -624,6 +624,15 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
                 }
 
+                auto isCollectedCoinjoin = [&](const Transaction &candidate) {
+                    for (const auto &entry : cjsOfGivenType) {
+                        if (entry.second.find(candidate) != entry.second.end()) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
                 // CJTX and its anonymity sets
                 using AnonymitySetsFuncType = std::unordered_map<Transaction, std::unordered_map<int64_t, int64_t>>;
                 // For txes which consolidate inputs from multiple cjtxes. CJTX = Transaction, map = <value,
@@ -681,10 +690,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                                 continue;
                             }
                             auto spendingTx = output.getSpendingTx().value();
-                            if (ignoreRemixes &&
-                                !(cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                  cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                  cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end())) {
+                            if (ignoreRemixes && isCollectedCoinjoin(spendingTx)) {
                                 continue;
                             }
                         }
@@ -821,9 +827,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                             raised++;
                         } else {
                             auto spendingTx = output.getSpendingTx().value();
-                            if (cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end()) {
+                            if (!isCollectedCoinjoin(spendingTx)) {
                                 notRemixedOutputs++;
                                 raised++;
                             }

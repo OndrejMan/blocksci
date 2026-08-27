@@ -53,6 +53,23 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
 
 
 @pytest.mark.btc
+def test_anonymity_degradation_ignores_joinmarket_remixes(
+    linked_coinjoin_chain, linked_coinjoin_data
+):
+    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
+
+    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
+        0, len(linked_coinjoin_chain), 0, "joinmarket", ignoreRemixes=True
+    )
+    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
+
+    # Five equal outputs of the first CoinJoin are spent by the second
+    # JoinMarket CoinJoin. The remaining five are not remixed.
+    assert degradation_by_txid[first_txid]["total_count"] == 5
+    assert degradation_by_txid[first_txid]["not_remixed_outputs"] == 5
+
+
+@pytest.mark.btc
 def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_chain):
     linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
     first_coinjoin_height = min(tx.block.height for tx in linked)
