@@ -98,7 +98,7 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
     // Then we build other levels by merging the sets of outputs of the transactions in the previous level.
     std::unordered_map<Transaction, std::unordered_set<Output>> seen;
     std::unordered_set<Transaction> bfsProcessed;
-    std::queue<std::pair<const Transaction &, int>> bfsQueue;
+    std::queue<std::pair<Transaction, int>> bfsQueue;
     std::unordered_map<int, std::unordered_set<Transaction>> txesByLevel;
     bfsQueue.push({tx, 0});
     bfsProcessed.insert(tx);
@@ -110,14 +110,15 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
         for (const auto &output : currentTx.outputs()) {
             if (!output.isSpent()) continue;
             auto spendingTx = output.getSpendingTx().value();
+            const auto nextLevel = level + 1;
+            if (nextLevel > maxLevel) {
+                continue;
+            }
             if (bfsProcessed.find(spendingTx) != bfsProcessed.end()) {
                 continue;
             }
             bfsProcessed.insert(spendingTx);
-            bfsQueue.push({spendingTx, level + 1});
-            if (level + 1 > maxLevel) {
-                continue;
-            }
+            bfsQueue.push({spendingTx, nextLevel});
             if (seen.find(spendingTx) == seen.end()) {
                 seen[spendingTx] = {};
             }
