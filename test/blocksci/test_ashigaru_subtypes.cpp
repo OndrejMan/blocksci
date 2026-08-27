@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <new>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -64,7 +65,7 @@ TEST(AshigaruSubtypeTest, ClassifiesBothOfficialPoolSizes) {
     SyntheticAshigaruTransaction smallPool{smallPoolSatoshis};
     EXPECT_TRUE(isAshigaruOfSubtype(smallPool.transaction, "2.5m"));
     EXPECT_FALSE(isAshigaruOfSubtype(smallPool.transaction, "25m"));
-    EXPECT_FALSE(isAshigaruOfSubtype(smallPool.transaction, "250k"));
+    EXPECT_THROW(isAshigaruOfSubtype(smallPool.transaction, "250k"), std::invalid_argument);
 }
 
 TEST(AshigaruSubtypeTest, UsesTheEqualOutputPoolSizeRatherThanTheFirstInput) {
@@ -74,4 +75,23 @@ TEST(AshigaruSubtypeTest, UsesTheEqualOutputPoolSizeRatherThanTheFirstInput) {
     SyntheticAshigaruTransaction smallPoolWithNearPoolInput{
         smallPoolSatoshis, smallPoolSatoshis + 1};
     EXPECT_TRUE(isAshigaruOfSubtype(smallPoolWithNearPoolInput.transaction, "2.5m"));
+}
+
+TEST(CoinjoinParameterValidationTest, RejectsUnknownDetectorType) {
+    EXPECT_THROW(blocksci::heuristics::validateCoinjoinParameters("wasbai2"), std::invalid_argument);
+}
+
+TEST(CoinjoinParameterValidationTest, AcceptsEverySupportedDetectorType) {
+    EXPECT_NO_THROW(blocksci::heuristics::validateCoinjoinParameters("wasabi1"));
+    EXPECT_NO_THROW(blocksci::heuristics::validateCoinjoinParameters("wasabi2"));
+    EXPECT_NO_THROW(blocksci::heuristics::validateCoinjoinParameters("whirlpool"));
+    EXPECT_NO_THROW(blocksci::heuristics::validateCoinjoinParameters("ashigaru"));
+    EXPECT_NO_THROW(blocksci::heuristics::validateCoinjoinParameters("joinmarket"));
+}
+
+TEST(CoinjoinParameterValidationTest, RejectsUnknownOrInapplicableSubtypeBeforeDetection) {
+    SyntheticAshigaruTransaction transaction{smallPoolSatoshis};
+
+    EXPECT_THROW(blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "joinmarket", "50m"),
+                 std::invalid_argument);
 }
