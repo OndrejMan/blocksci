@@ -94,15 +94,15 @@ namespace blocksci {
          */
         bool BLOCKSCI_EXPORT isAshigaruCoinJoin(const Transaction &tx);
         /**
-         * Given a string "wasabi2", "wasabi1", or "whirlpool", return whether
-         * the transaction is the coinjoin of the given type.
+         * Return whether the transaction matches the detector for the given
+         * CoinJoin type; detectors may overlap.
          *
          * @param tx The transaction to check
-         * @param type The type of coinjoin to check for (wasabi1, wasabi2, whirlpool, ashigaru)
+         * @param type The detector to check (wasabi1, wasabi2, whirlpool, ashigaru, joinmarket)
          * @param subtype Optional denomination subtype. Ashigaru supports "25m" (0.25 BTC) and
          *                "2.5m" (0.025 BTC).
          *
-         * @return true if the transaction is a coinjoin of the given type, false otherwise
+         * @return true if the transaction matches the requested detector, false otherwise
          */
         bool BLOCKSCI_EXPORT isCoinjoinOfGivenType(const Transaction &tx, const std::string &type,
                                                    std::optional<std::string> subtype = std::nullopt,
