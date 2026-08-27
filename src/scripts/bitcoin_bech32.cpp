@@ -114,6 +114,11 @@ std::string encode(const std::string& hrp, const bech32_data& values, Encoding e
     if (encoding == Encoding::INVALID) {
         return "";
     }
+    for (const auto value : values) {
+        if (value > 31) {
+            return "";
+        }
+    }
     bech32_data checksum = create_checksum(hrp, values, encoding);
     bech32_data combined = cat(values, checksum);
     std::string ret = hrp + '1';
