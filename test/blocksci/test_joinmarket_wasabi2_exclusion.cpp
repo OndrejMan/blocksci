@@ -11,15 +11,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <optional>
 
 namespace {
 
-constexpr uint16_t participantCount = 50;
+constexpr uint16_t participantCount = 20;
 constexpr int64_t wasabi2Denomination = 10'000'000;
 
 // This transaction deliberately satisfies the broad JoinMarket shape while
-// satisfying every Wasabi 2 invariant: 50 ordered, unique P2WPKH inputs and
-// 50 ordered, unique equal-valued Wasabi 2-denomination outputs.
+// satisfying every Wasabi 2 invariant: 20 ordered, unique P2WPKH inputs and
+// 20 ordered, unique equal-valued Wasabi 2-denomination outputs.
 class SyntheticWasabi2JoinMarketOverlap {
     alignas(std::max_align_t)
         std::array<std::byte, sizeof(blocksci::RawTransaction) + 2 * participantCount * sizeof(blocksci::Inout)>
@@ -38,8 +39,8 @@ public:
     SyntheticWasabi2JoinMarketOverlap()
         : rawTx(new (storage.data()) blocksci::RawTransaction(0, 0, 0, participantCount, participantCount)),
           data{rawTx, &version, &hash, spentOutputNums.data(), sequenceNums.data()},
-          // At this height Wasabi 2 requires 50 inputs, matching this fixture.
-          transaction(data, 0, 800'000, 1, access) {
+          // At this height Wasabi 2's production minimum is 20 inputs.
+          transaction(data, 0, 900'000, 1, access) {
         auto *inouts = reinterpret_cast<blocksci::Inout *>(rawTx + 1);
         for (uint16_t index = 0; index < participantCount; ++index) {
             new (&inouts[index]) blocksci::Inout(
@@ -58,4 +59,13 @@ TEST(JoinMarketCoinJoinTest, ExcludesTransactionsRecognizedAsWasabi2) {
     ASSERT_TRUE(blocksci::heuristics::isWasabi2CoinJoin(overlap.transaction));
     EXPECT_FALSE(blocksci::heuristics::isJoinMarketCoinJoin(overlap.transaction));
     EXPECT_FALSE(blocksci::heuristics::isCoinjoinOfGivenType(overlap.transaction, "joinmarket"));
+}
+
+TEST(Wasabi2CoinJoinTest, AppliesMinInputCountOverride) {
+    SyntheticWasabi2JoinMarketOverlap transaction;
+
+    EXPECT_FALSE(blocksci::heuristics::isCoinjoinOfGivenType(
+        transaction.transaction, "wasabi2", std::nullopt, std::optional<uint64_t>{50}));
+    EXPECT_TRUE(blocksci::heuristics::isCoinjoinOfGivenType(
+        transaction.transaction, "wasabi2", std::nullopt, std::optional<uint64_t>{20}));
 }

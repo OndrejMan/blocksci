@@ -108,7 +108,7 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "create_clustering",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop,
                blocksci::coinjoin_heuristics::ClusteringHeuristic heuristicFunc, const std::string &outputPath,
-               bool overwrite, std::string coinjoinType, int maxDistance) {
+               bool overwrite, std::string coinjoinType, int maxDistance, std::optional<uint64_t> minInputCount) {
                 py::scoped_ostream_redirect stream(std::cout, py::module::import("sys").attr("stdout"));
 
                 if (stop == -1) {
@@ -116,10 +116,11 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
                 }
                 auto range = chain[{start, stop}];
                 return CoinjoinClusterManager::createClustering(range, heuristicFunc, outputPath, overwrite,
-                                                                coinjoinType, maxDistance);
+                                                                coinjoinType, maxDistance, minInputCount);
             },
             py::arg("chain"), py::arg("start"), py::arg("stop"), py::arg("heuristic_func"), py::arg("output_path"),
             py::arg("overwrite") = false, py::arg("coinjoin_type") = "None", py::arg("max_distance") = 2,
+            py::arg("min_input_count") = std::nullopt,
             "Creates a clustering of the blockchain using the given heuristic and saves it to the given output path.\n"
             "Possible coinjoin types are:\n"
             "- 'none': No coinjoin type is used\n"
@@ -129,7 +130,9 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "- 'ashigaru': Ashigaru CoinJoin\n\n"
             "The max_distance parameter specifies the maximum distance from a coinjoin transaction to collect "
             "addresses, where 0 means only the coinjoin transaction itself, 1 means the coinjoin transaction and its "
-            "direct neighbors, etc.");
+            "direct neighbors, etc. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
+            "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
+            "criteria.");
 }
 
 void init_cluster(py::class_<Cluster> &cl) {

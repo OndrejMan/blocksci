@@ -4,6 +4,22 @@ import blocksci
 from util import sorted_tx_list
 
 
+@pytest.mark.btc
+def test_coinjoin_clustering_rejects_min_input_count_for_non_wasabi2(
+    linked_coinjoin_chain, tmpdir_factory
+):
+    with pytest.raises(ValueError, match="min_input_count is only supported for coinjoin_type 'wasabi2'"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("invalid-coinjoin-clustering")),
+            coinjoin_type="joinmarket",
+            min_input_count=5,
+        )
+
+
 def test_clustering_default_heuristic(chain, tmpdir_factory):
     """Tests that we can run create_clustering with path and chain only"""
     blocksci.cluster.ClusterManager.create_clustering(
