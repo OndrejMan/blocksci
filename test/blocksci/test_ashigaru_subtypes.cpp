@@ -21,7 +21,7 @@ constexpr int64_t smallPoolSatoshis = 2'500'000;
 
 // isAshigaruCoinJoin only reads the transaction's input/output values.  This
 // minimal in-memory transaction makes the subtype test independent of a block
-// fixture and exercises isCoinjoinOfGivenType directly.
+// fixture and exercises both the compatibility wrapper and reusable detector.
 class SyntheticAshigaruTransaction {
     alignas(std::max_align_t)
         std::array<std::byte, sizeof(blocksci::RawTransaction) + 2 * participantCount * sizeof(blocksci::Inout)>
@@ -52,7 +52,7 @@ public:
 };
 
 bool isAshigaruOfSubtype(const blocksci::Transaction &transaction, const std::string &subtype) {
-    return blocksci::heuristics::isCoinjoinOfGivenType(transaction, "ashigaru", subtype);
+    return blocksci::heuristics::CoinjoinDetector{"ashigaru", subtype}(transaction);
 }
 
 }  // namespace
@@ -94,4 +94,19 @@ TEST(CoinjoinParameterValidationTest, RejectsUnknownOrInapplicableSubtypeBeforeD
 
     EXPECT_THROW(blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "joinmarket", "50m"),
                  std::invalid_argument);
+}
+
+TEST(CoinjoinDetectorTest, ReusesValidatedSubtypeDetector) {
+    SyntheticAshigaruTransaction matchingTransaction{smallPoolSatoshis};
+    SyntheticAshigaruTransaction nonMatchingTransaction{largePoolSatoshis};
+    blocksci::heuristics::CoinjoinDetector detector{"ashigaru", "2.5m"};
+
+    EXPECT_EQ(detector(matchingTransaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(
+                  matchingTransaction.transaction, "ashigaru", "2.5m"));
+    EXPECT_EQ(detector(nonMatchingTransaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(
+                  nonMatchingTransaction.transaction, "ashigaru", "2.5m"));
+    EXPECT_TRUE(detector(matchingTransaction.transaction));
+    EXPECT_THROW(blocksci::heuristics::CoinjoinDetector("joinmarket", "50m"), std::invalid_argument);
 }
