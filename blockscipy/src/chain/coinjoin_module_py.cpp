@@ -610,6 +610,17 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     cjsOfGivenType[coinjoinSubType.value()] =
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
                 }
+                std::unordered_set<Transaction> allCollectedCoinjoins;
+                for (const auto &entry : cjsOfGivenType) {
+                    allCollectedCoinjoins.insert(entry.second.begin(), entry.second.end());
+                }
+
+                // A spend counts as a remix only when the spending transaction is one of the CoinJoins
+                // collected above: within [start, stop), not in falseCoinjoins and linked to another
+                // CoinJoin of its type. Spends into any other round stay in the anonymity set.
+                auto isCollectedCoinjoin = [&](const Transaction &candidate) {
+                    return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
+                };
 
                 // CJTX and its anonymity sets
                 using AnonymitySetsFuncType = std::unordered_map<Transaction, std::unordered_map<int64_t, int64_t>>;
@@ -668,10 +679,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                                 continue;
                             }
                             auto spendingTx = output.getSpendingTx().value();
-                            if (ignoreRemixes &&
-                                !(cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                  cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                  cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end())) {
+                            if (ignoreRemixes && isCollectedCoinjoin(spendingTx)) {
                                 continue;
                             }
                         }
@@ -718,9 +726,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 auto decreaseAnonymityIfConsolidated = [&](const Transaction &tx) -> PointingToTransactionsType {
                     PointingToTransactionsType result;
                     // if it _is_ coinjoin and we ignore remixes
-                    if (!(cjsOfGivenType["wasabi1"].find(tx) == cjsOfGivenType["wasabi1"].end() &&
-                          cjsOfGivenType["wasabi2"].find(tx) == cjsOfGivenType["wasabi2"].end() &&
-                          cjsOfGivenType["whirlpool"].find(tx) == cjsOfGivenType["whirlpool"].end())) {
+                    if (isCollectedCoinjoin(tx)) {
                         return {};
                     }
 
@@ -808,9 +814,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                             raised++;
                         } else {
                             auto spendingTx = output.getSpendingTx().value();
-                            if (cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end()) {
+                            if (!isCollectedCoinjoin(spendingTx)) {
                                 notRemixedOutputs++;
                                 raised++;
                             }
