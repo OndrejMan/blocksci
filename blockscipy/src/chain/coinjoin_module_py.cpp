@@ -609,15 +609,12 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
                 blocksci::heuristics::validateCoinjoinParameters(coinjoinType, std::nullopt, coinjoinSubType);
                 std::unordered_map<std::string, std::unordered_set<Transaction>> cjsOfGivenType;
-                cjsOfGivenType["wasabi1"] =
-                    findLinkedCjTxes(start, stop, "wasabi1", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["wasabi2"] =
-                    findLinkedCjTxes(start, stop, "wasabi2", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["whirlpool"] =
-                    findLinkedCjTxes(start, stop, "whirlpool", chain, std::nullopt, falseCoinjoins);
-                if (cjsOfGivenType.find(coinjoinType) == cjsOfGivenType.end()) {
-                    cjsOfGivenType[coinjoinType] =
-                        findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, falseCoinjoins);
+                std::unordered_set<Transaction> allCollectedCoinjoins;
+                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru", "joinmarket"}) {
+                    // Find links only between CoinJoins of the same type.
+                    auto coinjoins = findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
+                    allCollectedCoinjoins.insert(coinjoins.begin(), coinjoins.end());
+                    cjsOfGivenType.emplace(type, std::move(coinjoins));
                 }
                 if (coinjoinSubType.has_value()) {
                     cjsOfGivenType[coinjoinSubType.value()] =
@@ -625,12 +622,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 }
 
                 auto isCollectedCoinjoin = [&](const Transaction &candidate) {
-                    for (const auto &entry : cjsOfGivenType) {
-                        if (entry.second.find(candidate) != entry.second.end()) {
-                            return true;
-                        }
-                    }
-                    return false;
+                    return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
                 };
 
                 // CJTX and its anonymity sets
@@ -736,10 +728,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
 
                 auto decreaseAnonymityIfConsolidated = [&](const Transaction &tx) -> PointingToTransactionsType {
                     PointingToTransactionsType result;
-                    // if it _is_ coinjoin and we ignore remixes
-                    if (!(cjsOfGivenType["wasabi1"].find(tx) == cjsOfGivenType["wasabi1"].end() &&
-                          cjsOfGivenType["wasabi2"].find(tx) == cjsOfGivenType["wasabi2"].end() &&
-                          cjsOfGivenType["whirlpool"].find(tx) == cjsOfGivenType["whirlpool"].end())) {
+                    // A remix is not a consolidation when remix filtering is enabled.
+                    if (ignoreRemixes && isCollectedCoinjoin(tx)) {
                         return {};
                     }
 

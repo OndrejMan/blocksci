@@ -70,6 +70,23 @@ def test_anonymity_degradation_ignores_joinmarket_remixes(
 
 
 @pytest.mark.btc
+def test_anonymity_degradation_does_not_count_joinmarket_remix_as_consolidation(
+    linked_coinjoin_chain, linked_coinjoin_data
+):
+    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
+
+    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
+        0, len(linked_coinjoin_chain), 1, "joinmarket", ignoreRemixes=True
+    )
+    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
+
+    # The second JoinMarket CoinJoin spends five outputs of the first one. It
+    # is a remix, not a consolidation that degrades the remaining anonymity
+    # set. Before the dynamic CoinJoin set, it was incorrectly counted here.
+    assert degradation_by_txid[first_txid]["total_count"] == 5
+
+
+@pytest.mark.btc
 def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_chain):
     linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
     first_coinjoin_height = min(tx.block.height for tx in linked)
