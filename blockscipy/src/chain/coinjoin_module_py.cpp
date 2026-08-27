@@ -596,23 +596,16 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::tuple<int64_t, int64_t>> ww2DenomsBucket,
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
                 std::unordered_map<std::string, std::unordered_set<Transaction>> cjsOfGivenType;
-                cjsOfGivenType["wasabi1"] =
-                    findLinkedCjTxes(start, stop, "wasabi1", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["wasabi2"] =
-                    findLinkedCjTxes(start, stop, "wasabi2", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["whirlpool"] =
-                    findLinkedCjTxes(start, stop, "whirlpool", chain, std::nullopt, falseCoinjoins);
-                if (cjsOfGivenType.find(coinjoinType) == cjsOfGivenType.end()) {
-                    cjsOfGivenType[coinjoinType] =
-                        findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, falseCoinjoins);
+                std::unordered_set<Transaction> allCollectedCoinjoins;
+                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru", "joinmarket"}) {
+                    // Find links only between CoinJoins of the same type.
+                    auto coinjoins = findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
+                    allCollectedCoinjoins.insert(coinjoins.begin(), coinjoins.end());
+                    cjsOfGivenType.emplace(type, std::move(coinjoins));
                 }
                 if (coinjoinSubType.has_value()) {
                     cjsOfGivenType[coinjoinSubType.value()] =
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
-                }
-                std::unordered_set<Transaction> allCollectedCoinjoins;
-                for (const auto &entry : cjsOfGivenType) {
-                    allCollectedCoinjoins.insert(entry.second.begin(), entry.second.end());
                 }
 
                 // A spend counts as a remix only when the spending transaction is one of the CoinJoins
