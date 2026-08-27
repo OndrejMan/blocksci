@@ -37,9 +37,10 @@ std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) 
 }
 
 std::optional<uint64_t> validateCoinjoinFilterParameters(const std::string &coinjoinType,
-                                                          std::optional<int> minInputCount) {
+                                                          std::optional<int> minInputCount,
+                                                          std::optional<std::string> subtype = std::nullopt) {
     auto validatedMinInputCount = validateMinInputCount(minInputCount);
-    blocksci::heuristics::validateCoinjoinParameters(std::string{coinjoinType}, validatedMinInputCount);
+    blocksci::heuristics::validateCoinjoinParameters(std::string{coinjoinType}, validatedMinInputCount, subtype);
     return validatedMinInputCount;
 }
 
@@ -66,7 +67,7 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto validatedMinInputCount = validateCoinjoinFilterParameters(coinjoinType, minInputCount);
+    auto validatedMinInputCount = validateCoinjoinFilterParameters(coinjoinType, minInputCount, subtype);
     auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
         return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype, validatedMinInputCount);
     });
@@ -172,6 +173,7 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
 
 ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeight start, BlockHeight stop,
                                                     std::string coinjoinType, int maxLevel) {
+    blocksci::heuristics::validateCoinjoinParameters(coinjoinType);
     ConsolidationResultType result;
 
     using MapType = ConsolidationResultType;
@@ -519,6 +521,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "get_coinjoin_consolidations",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, double inputOutputRatio,
                std::string coinjoinType, int maxHops) {
+                blocksci::heuristics::validateCoinjoinParameters(coinjoinType);
                 using ResultType =
                     std::map<std::string, std::vector<Transaction>>;              // consolidation_type, [input_tx_hash]
                 using MapType = std::vector<std::pair<Transaction, ResultType>>;  // tx_hash, ResultType
@@ -616,6 +619,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::string> coinjoinSubType, bool ignoreNonStandardDenominations, bool ignoreRemixes,
                std::optional<std::tuple<int64_t, int64_t>> ww2DenomsBucket,
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
+                blocksci::heuristics::validateCoinjoinParameters(coinjoinType, std::nullopt, coinjoinSubType);
                 // The CoinJoin sets below keep only CoinJoins linked to another one of the same type. JoinMarket
                 // CoinJoins need not spend one another, so a linked set would silently miss standalone rounds.
                 if (coinjoinType == "joinmarket") {
