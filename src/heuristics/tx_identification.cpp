@@ -1337,8 +1337,8 @@ namespace blocksci {
         CoinJoinType getCoinjoinTag(const Transaction &tx) {
             if (blocksci::heuristics::isWasabi2CoinJoin(tx)) {
                 // 850237 is July 1st 2024
-                return tx.block().height() < 850237 ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
-                                                    : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
+                return tx.getBlockHeight() < 850237 ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
+                                                   : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
             } else if (blocksci::heuristics::isWhirlpoolCoinJoin(tx)) {
                 return blocksci::heuristics::CoinJoinType::Whirlpool;
             } else if (blocksci::heuristics::isAshigaruCoinJoin(tx)) {
