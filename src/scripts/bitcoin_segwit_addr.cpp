@@ -113,6 +113,10 @@ std::pair<int, segwit_data> decode(const std::string& hrp, const std::string& ad
 
 /** Encode a SegWit address. */
 std::string encode(const std::string& hrp, int witver, const segwit_data& witprog) {
+    if (!isValidWitnessProgram(witver, witprog)) {
+        return "";
+    }
+
     segwit_data enc;
     enc.push_back(static_cast<unsigned char>(witver));
     convertbits<8, 5, true>(enc, witprog);
