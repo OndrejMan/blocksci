@@ -1303,12 +1303,13 @@ namespace blocksci {
                 if (!subtype.has_value()) {
                     return isCoinjoin;
                 }
-                // The pool is the first input's value; denominations live in subtypeDenominations.
+                // Inputs may differ slightly from the pool denomination; the
+                // equal-valued outputs define the Whirlpool pool instead.
                 auto denomination = denominationForSubtype(type, subtype.value());
                 if (!denomination.has_value()) {
                     throw std::logic_error("validated Whirlpool subtype did not select a denomination");
                 }
-                return tx.inputs()[0].getValue() == denomination.value();
+                return tx.outputs()[0].getValue() == denomination.value();
             }
             if (type == "ashigaru") {
                 auto isAshigaru = isAshigaruCoinJoin(tx);
