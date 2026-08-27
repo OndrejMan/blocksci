@@ -1076,16 +1076,17 @@ namespace blocksci {
             // ---------------------------------------------------------
             const size_t numIns = inputs.size();
             const size_t numOuts = outputs.size();
+            const size_t participantCount = static_cast<size_t>(maxCount);
 
             // Basic structural sanity - JoinMarket needs reasonable input/output counts
             if (numIns < 2 || numOuts < 3) {  // Minimum for any coinjoin
                 return false;
             }
 
-            // Input-to-participant ratio should be reasonable (0.5 to 5.0)
-            double inputParticipantRatio = static_cast<double>(numIns) / maxCount;
-            if (inputParticipantRatio < 0.5 || inputParticipantRatio > 5.0) {
-                return false;  // Each participant typically contributes 1-3 inputs
+            // Each mix output belongs to one participant, who must contribute
+            // at least one input. Allow up to five inputs per participant.
+            if (numIns < participantCount || numIns > 5 * participantCount) {
+                return false;
             }
 
             // Outputs should not exceed twice the number of equal mix outputs
@@ -1122,8 +1123,7 @@ namespace blocksci {
             for (const auto &i : inputs) {
                 uniqueInputs.insert(i.getAddress());
             }
-            size_t minUniqueInputs = static_cast<size_t>(maxCount * 0.67);
-            if (uniqueInputs.size() < minUniqueInputs) {
+            if (uniqueInputs.size() < participantCount) {
                 return false;
             }
 
@@ -1165,7 +1165,7 @@ namespace blocksci {
             // For N participants, allow 0 to N change outputs
             // 0 = no participant has change (all inputs exactly equal mix amount)
             // N = every participant has change
-            if (changeOutputCount < 0 || changeOutputCount > maxCount) {
+            if (changeOutputCount > maxCount) {
                 return false;
             }
 
