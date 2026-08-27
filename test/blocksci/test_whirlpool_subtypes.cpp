@@ -59,3 +59,15 @@ TEST(WhirlpoolSubtypeTest, UsesTheEqualOutputPoolSizeRatherThanTheFirstInput) {
     EXPECT_FALSE(blocksci::heuristics::isCoinjoinOfGivenType(
         poolWithNearPoolFirstInput.transaction, "whirlpool", "1m"));
 }
+
+TEST(CoinjoinDetectorTest, MatchesWhirlpoolCompatibilityWrapperAcrossRepeatedCalls) {
+    SyntheticWhirlpoolTransaction transaction{poolSatoshis + 1};
+    blocksci::heuristics::CoinjoinDetector matchingDetector{"whirlpool", "5m"};
+    blocksci::heuristics::CoinjoinDetector nonMatchingDetector{"whirlpool", "1m"};
+
+    EXPECT_EQ(matchingDetector(transaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "whirlpool", "5m"));
+    EXPECT_EQ(nonMatchingDetector(transaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "whirlpool", "1m"));
+    EXPECT_TRUE(matchingDetector(transaction.transaction));
+}

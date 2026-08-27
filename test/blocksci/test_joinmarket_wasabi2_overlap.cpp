@@ -80,3 +80,32 @@ TEST(Wasabi2CoinJoinTest, AppliesMinInputCountOverride) {
     EXPECT_TRUE(blocksci::heuristics::isCoinjoinOfGivenType(
         transaction.transaction, "wasabi2", std::nullopt, std::optional<uint64_t>{20}));
 }
+
+TEST(CoinjoinDetectorTest, MatchesStatelessCompatibilityWrappersAcrossRepeatedCalls) {
+    SyntheticWasabi2JoinMarketOverlap transaction;
+    blocksci::heuristics::CoinjoinDetector joinmarketDetector{"joinmarket"};
+    blocksci::heuristics::CoinjoinDetector wasabi1Detector{"wasabi1"};
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        EXPECT_EQ(joinmarketDetector(transaction.transaction),
+                  blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "joinmarket"));
+        EXPECT_EQ(wasabi1Detector(transaction.transaction),
+                  blocksci::heuristics::isCoinjoinOfGivenType(transaction.transaction, "wasabi1"));
+    }
+}
+
+TEST(CoinjoinDetectorTest, MatchesWasabi2CompatibilityWrapperWithInputOverrides) {
+    SyntheticWasabi2JoinMarketOverlap transaction;
+    blocksci::heuristics::CoinjoinDetector strictDetector{
+        "wasabi2", std::nullopt, std::optional<uint64_t>{50}};
+    blocksci::heuristics::CoinjoinDetector matchingDetector{
+        "wasabi2", std::nullopt, std::optional<uint64_t>{20}};
+
+    EXPECT_EQ(strictDetector(transaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(
+                  transaction.transaction, "wasabi2", std::nullopt, std::optional<uint64_t>{50}));
+    EXPECT_EQ(matchingDetector(transaction.transaction),
+              blocksci::heuristics::isCoinjoinOfGivenType(
+                  transaction.transaction, "wasabi2", std::nullopt, std::optional<uint64_t>{20}));
+    EXPECT_TRUE(matchingDetector(transaction.transaction));
+}

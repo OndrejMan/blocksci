@@ -1285,53 +1285,69 @@ namespace blocksci {
             }
         }
 
-        bool isCoinjoinOfGivenType(const Transaction &tx, const std::string &type, std::optional<std::string> subtype,
-                                   std::optional<uint64_t> minInputCount) {
-            validateCoinjoinParameters(type, minInputCount, subtype);
-
-            if (type == "wasabi1") {
+        namespace {
+            bool matchesWasabi1(const Transaction &tx, const std::optional<uint64_t> &,
+                                const std::optional<int64_t> &) {
                 return isWasabi1CoinJoin(tx);
             }
-            if (type == "wasabi2") {
+
+            bool matchesWasabi2(const Transaction &tx, const std::optional<uint64_t> &minInputCount,
+                                const std::optional<int64_t> &) {
                 return isWasabi2CoinJoin(tx, minInputCount);
             }
-            if (type == "whirlpool") {
-                bool isCoinjoin = isWhirlpoolCoinJoin(tx);
-                if (!isCoinjoin) {
-                    return false;
-                }
-                if (!subtype.has_value()) {
-                    return isCoinjoin;
-                }
-                // Inputs may differ slightly from the pool denomination; the
-                // equal-valued outputs define the Whirlpool pool instead.
-                auto denomination = denominationForSubtype(type, subtype.value());
-                if (!denomination.has_value()) {
-                    throw std::logic_error("validated Whirlpool subtype did not select a denomination");
-                }
-                return tx.outputs()[0].getValue() == denomination.value();
-            }
-            if (type == "ashigaru") {
-                auto isAshigaru = isAshigaruCoinJoin(tx);
-                if (!isAshigaru) {
-                    return false;
-                }
-                if (!subtype.has_value()) {
-                    return isAshigaru;
-                }
-                // Inputs may differ slightly from the pool denomination; the
-                // equal-valued outputs define the Ashigaru pool instead.
-                auto denomination = denominationForSubtype(type, subtype.value());
-                if (!denomination.has_value()) {
-                    throw std::logic_error("validated Ashigaru subtype did not select a denomination");
-                }
-                return tx.outputs()[0].getValue() == denomination.value();
-            }
-            if (type == "joinmarket") {
-                return isJoinMarketCoinJoin(tx);
+
+            bool matchesWhirlpool(const Transaction &tx, const std::optional<uint64_t> &,
+                                  const std::optional<int64_t> &subtypeDenomination) {
+                return isWhirlpoolCoinJoin(tx) &&
+                       (!subtypeDenomination.has_value() || tx.outputs()[0].getValue() == subtypeDenomination.value());
             }
 
-            throw std::logic_error("validated coinjoin_type did not select a detector");
+            bool matchesAshigaru(const Transaction &tx, const std::optional<uint64_t> &,
+                                 const std::optional<int64_t> &subtypeDenomination) {
+                return isAshigaruCoinJoin(tx) &&
+                       (!subtypeDenomination.has_value() || tx.outputs()[0].getValue() == subtypeDenomination.value());
+            }
+
+            bool matchesJoinMarket(const Transaction &tx, const std::optional<uint64_t> &,
+                                   const std::optional<int64_t> &) {
+                return isJoinMarketCoinJoin(tx);
+            }
+        }  // namespace
+
+        CoinjoinDetector::CoinjoinDetector(const std::string &type, std::optional<std::string> subtype,
+                                           std::optional<uint64_t> minInputCount)
+            : minInputCount(minInputCount) {
+            validateCoinjoinParameters(type, minInputCount, subtype);
+
+            if (subtype.has_value()) {
+                subtypeDenomination = denominationForSubtype(type, subtype.value());
+                if (!subtypeDenomination.has_value()) {
+                    throw std::logic_error("validated CoinJoin subtype did not select a denomination");
+                }
+            }
+
+            if (type == "wasabi1") {
+                predicate = matchesWasabi1;
+            } else if (type == "wasabi2") {
+                predicate = matchesWasabi2;
+            } else if (type == "whirlpool") {
+                predicate = matchesWhirlpool;
+            } else if (type == "ashigaru") {
+                predicate = matchesAshigaru;
+            } else if (type == "joinmarket") {
+                predicate = matchesJoinMarket;
+            } else {
+                throw std::logic_error("validated coinjoin_type did not select a detector");
+            }
+        }
+
+        bool CoinjoinDetector::operator()(const Transaction &tx) const {
+            return predicate(tx, minInputCount, subtypeDenomination);
+        }
+
+        bool isCoinjoinOfGivenType(const Transaction &tx, const std::string &type, std::optional<std::string> subtype,
+                                   std::optional<uint64_t> minInputCount) {
+            return CoinjoinDetector(type, subtype, minInputCount)(tx);
         }
 
         CoinJoinType getCoinjoinTag(const Transaction &tx) {

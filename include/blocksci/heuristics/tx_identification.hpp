@@ -12,6 +12,7 @@
 
 #include <blocksci/chain/chain_fwd.hpp>
 #include <blocksci/scripts/scripts_fwd.hpp>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -104,6 +105,28 @@ namespace blocksci {
         void BLOCKSCI_EXPORT validateCoinjoinParameters(const std::string &type,
                                                         std::optional<uint64_t> minInputCount = std::nullopt,
                                                         std::optional<std::string> subtype = std::nullopt);
+
+        /**
+         * A validated CoinJoin detector that can be reused while scanning a
+         * range of transactions. Construct it once outside the scan loop to
+         * avoid repeatedly validating string parameters and selecting a
+         * detector for every transaction.
+         */
+        class BLOCKSCI_EXPORT CoinjoinDetector {
+        public:
+            CoinjoinDetector(const std::string &type, std::optional<std::string> subtype = std::nullopt,
+                             std::optional<uint64_t> minInputCount = std::nullopt);
+
+            bool operator()(const Transaction &tx) const;
+
+        private:
+            using Predicate = bool (*)(const Transaction &, const std::optional<uint64_t> &,
+                                       const std::optional<int64_t> &);
+
+            Predicate predicate;
+            std::optional<uint64_t> minInputCount;
+            std::optional<int64_t> subtypeDenomination;
+        };
 
         /**
          * Return whether the transaction matches the detector for the given
