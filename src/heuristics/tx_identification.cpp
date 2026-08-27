@@ -1165,17 +1165,8 @@ namespace blocksci {
             }
 
             // ---------------------------------------------------------
-            // 5. Input/output uniqueness sanity
+            // 5. Output uniqueness sanity
             // ---------------------------------------------------------
-            std::unordered_set<Address> uniqueInputs;
-            for (const auto &i : inputs) {
-                uniqueInputs.insert(i.getAddress());
-            }
-            size_t minUniqueInputs = static_cast<size_t>(maxCount * 0.67);
-            if (uniqueInputs.size() < minUniqueInputs) {
-                return false;
-            }
-
             std::unordered_set<Address> uniqueOutputs;
             for (const auto &o : outputs) {
                 uniqueOutputs.insert(o.getAddress());
