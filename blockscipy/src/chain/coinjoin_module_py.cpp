@@ -614,6 +614,10 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     findLinkedCjTxes(start, stop, "wasabi2", chain, std::nullopt, falseCoinjoins);
                 cjsOfGivenType["whirlpool"] =
                     findLinkedCjTxes(start, stop, "whirlpool", chain, std::nullopt, falseCoinjoins);
+                if (cjsOfGivenType.find(coinjoinType) == cjsOfGivenType.end()) {
+                    cjsOfGivenType[coinjoinType] =
+                        findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, falseCoinjoins);
+                }
                 if (coinjoinSubType.has_value()) {
                     cjsOfGivenType[coinjoinSubType.value()] =
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
