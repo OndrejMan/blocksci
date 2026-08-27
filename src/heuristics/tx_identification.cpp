@@ -1237,7 +1237,7 @@ namespace blocksci {
             }
 
             auto total_output_value =
-                std::accumulate(tx.outputs().begin(), tx.outputs().end(), 0,
+                std::accumulate(tx.outputs().begin(), tx.outputs().end(), int64_t{0},
                                 [](int64_t sum, const Output &output) { return sum + output.getValue(); });
 
             // Check if there is one huge output that has the majority of the output value, while the rest are small,
