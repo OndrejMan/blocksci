@@ -947,7 +947,7 @@ namespace blocksci {
             // As the format identified at the end of section 2.1 is relatively broad - a standardized output and a
             // change output for each participant - it is likely we will detect transactions from other protocols or
             // softwares.
-            if (isWasabi1CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
+            if (isWasabi1CoinJoin(tx) || isWasabi2CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
                 return false;
             }
 
@@ -1016,7 +1016,7 @@ namespace blocksci {
         }
 
         bool isJoinMarketCoinJoin(const Transaction &tx) {
-            if (isWasabi1CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
+            if (isWasabi1CoinJoin(tx) || isWasabi2CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
                 return false;
             }
 
