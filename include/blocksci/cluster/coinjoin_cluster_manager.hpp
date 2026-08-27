@@ -67,8 +67,9 @@ namespace blocksci {
          * @param chain BlockRange to cluster
          * @param clusteringFunc Clustering heuristic function
          * @param outputPath Path to output directory
+         * @param coinjoinType Type of CoinJoin transactions to cluster (wasabi1, wasabi2, whirlpool,
+         *        ashigaru, joinmarket). Required: there is no clustering without a seed type.
          * @param overwrite Overwrite existing cluster data
-         * @param coinjoinType Type of CoinJoin transactions to cluster (wasabi1, wasabi2, whirlpool, ashigaru)
          * @param maxHops Maximum number of hops to collect addresses around CoinJoin transactions
          * @param minInputCount Optional override of the Wasabi 2 minimum-input threshold.
          *        It is accepted only when coinjoinType is "wasabi2"; all other detectors
@@ -77,8 +78,8 @@ namespace blocksci {
          */
         static CoinjoinClusterManager createClustering(
             BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-            const std::string &outputPath, bool overwrite = false, std::string coinjoinType = "None", int maxHops = 2,
-            std::optional<uint64_t> minInputCount = std::nullopt);
+            const std::string &outputPath, const std::string &coinjoinType, bool overwrite = false,
+            int maxHops = 2, std::optional<uint64_t> minInputCount = std::nullopt);
 
         Cluster getCluster(const Address &address) const;
 

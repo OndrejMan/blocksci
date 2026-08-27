@@ -420,7 +420,7 @@ namespace blocksci {
 
     CoinjoinClusterManager CoinjoinClusterManager::createClustering(
         BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-        const std::string &outputPath, bool overwrite, std::string coinjoinType, int maxHops,
+        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
         std::optional<uint64_t> minInputCount) {
         heuristics::validateCoinjoinParameters(coinjoinType, minInputCount);
 
