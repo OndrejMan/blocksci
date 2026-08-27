@@ -36,6 +36,13 @@ std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) 
     return static_cast<uint64_t>(minInputCount.value());
 }
 
+std::optional<uint64_t> validateCoinjoinFilterParameters(const std::string &coinjoinType,
+                                                          std::optional<int> minInputCount) {
+    auto validatedMinInputCount = validateMinInputCount(minInputCount);
+    blocksci::heuristics::validateCoinjoinParameters(std::string{coinjoinType}, validatedMinInputCount);
+    return validatedMinInputCount;
+}
+
 void warnSubsetMatchingDeprecated() {
     if (PyErr_WarnEx(PyExc_DeprecationWarning,
                      "scan_coinjoins_by_subset_matching is deprecated: its input-subset backtracking is exponential "
@@ -59,7 +66,7 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto validatedMinInputCount = validateMinInputCount(minInputCount);
+    auto validatedMinInputCount = validateCoinjoinFilterParameters(coinjoinType, minInputCount);
     auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
         return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype, validatedMinInputCount);
     });
@@ -334,13 +341,14 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<int> minInputCount) {
                 return findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, std::nullopt, minInputCount);
             },
-            "Filter coinjoin transactions", pybind11::arg("start"), pybind11::arg("stop"),
+            "Return CoinJoin candidates that are directly linked to another candidate in the selected block range",
+            pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("coinjoin_type"), pybind11::arg("min_input_count") = std::nullopt)
         .def(
             "filter_coinjoin_txes_raw",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
                std::optional<int> minInputCount) {
-                auto validatedMinInputCount = validateMinInputCount(minInputCount);
+                auto validatedMinInputCount = validateCoinjoinFilterParameters(coinjoinType, minInputCount);
                 py::gil_scoped_release release;
                 return chain[{start, stop}].filter([&](const Transaction &tx) {
                     return blocksci::heuristics::isCoinjoinOfGivenType(

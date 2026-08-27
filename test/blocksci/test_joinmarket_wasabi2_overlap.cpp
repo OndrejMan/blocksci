@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <new>
 #include <optional>
+#include <stdexcept>
 
 namespace {
 
@@ -52,6 +53,14 @@ public:
 };
 
 }  // namespace
+
+TEST(JoinMarketCoinJoinTest, RejectsWasabi2OnlyMinInputCountOverride) {
+    SyntheticWasabi2JoinMarketOverlap overlap;
+
+    EXPECT_THROW(blocksci::heuristics::isCoinjoinOfGivenType(
+                     overlap.transaction, "joinmarket", std::nullopt, std::optional<uint64_t>{5}),
+                 std::invalid_argument);
+}
 
 TEST(Wasabi2CoinJoinTest, AppliesMinInputCountOverride) {
     SyntheticWasabi2JoinMarketOverlap transaction;
