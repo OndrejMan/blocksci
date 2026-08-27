@@ -20,6 +20,18 @@ def test_coinjoin_clustering_rejects_min_input_count_for_non_wasabi2(
         )
 
 
+@pytest.mark.btc
+def test_coinjoin_clustering_requires_a_type(linked_coinjoin_chain, tmpdir_factory):
+    with pytest.raises(TypeError):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("untyped-coinjoin-clustering")),
+        )
+
+
 def test_clustering_default_heuristic(chain, tmpdir_factory):
     """Tests that we can run create_clustering with path and chain only"""
     blocksci.cluster.ClusterManager.create_clustering(
