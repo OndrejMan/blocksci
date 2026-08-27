@@ -96,11 +96,14 @@ namespace blocksci {
         /**
          * Validate parameters shared by CoinJoin filtering and clustering APIs.
          *
-         * minInputCount is a Wasabi 2-specific threshold and cannot be used
-         * with another CoinJoin type.
+         * Only wasabi1, wasabi2, whirlpool, ashigaru, and joinmarket are
+         * valid detector types. minInputCount is a Wasabi 2-specific threshold
+         * and cannot be used with another CoinJoin type. Subtypes are only
+         * supported by Whirlpool (50m, 5m, 1m, 100k) and Ashigaru (25m, 2.5m).
          */
         void BLOCKSCI_EXPORT validateCoinjoinParameters(const std::string &type,
-                                                        std::optional<uint64_t> minInputCount = std::nullopt);
+                                                        std::optional<uint64_t> minInputCount = std::nullopt,
+                                                        std::optional<std::string> subtype = std::nullopt);
 
         /**
          * Return whether the transaction matches the detector for the given

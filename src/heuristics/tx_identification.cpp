@@ -1216,15 +1216,33 @@ namespace blocksci {
             return ConsolidationType::None;
         }
 
-        void validateCoinjoinParameters(const std::string &type, std::optional<uint64_t> minInputCount) {
+        void validateCoinjoinParameters(const std::string &type, std::optional<uint64_t> minInputCount,
+                                        std::optional<std::string> subtype) {
+            if (type != "wasabi1" && type != "wasabi2" && type != "whirlpool" && type != "ashigaru" &&
+                type != "joinmarket") {
+                throw std::invalid_argument("unknown coinjoin_type '" + type +
+                                            "'; expected wasabi1, wasabi2, whirlpool, ashigaru, or joinmarket");
+            }
             if (minInputCount.has_value() && type != "wasabi2") {
                 throw std::invalid_argument("min_input_count is only supported for coinjoin_type 'wasabi2'");
+            }
+            if (!subtype.has_value()) {
+                return;
+            }
+
+            const auto &value = subtype.value();
+            const bool validWhirlpoolSubtype =
+                type == "whirlpool" && (value == "50m" || value == "5m" || value == "1m" || value == "100k");
+            const bool validAshigaruSubtype = type == "ashigaru" && (value == "25m" || value == "2.5m");
+            if (!validWhirlpoolSubtype && !validAshigaruSubtype) {
+                throw std::invalid_argument("unknown coinjoin_subtype '" + value + "' for coinjoin_type '" + type +
+                                            "'");
             }
         }
 
         bool isCoinjoinOfGivenType(const Transaction &tx, const std::string &type, std::optional<std::string> subtype,
                                    std::optional<uint64_t> minInputCount) {
-            validateCoinjoinParameters(type, minInputCount);
+            validateCoinjoinParameters(type, minInputCount, subtype);
 
             if (type == "wasabi1") {
                 return isWasabi1CoinJoin(tx);
@@ -1249,9 +1267,8 @@ namespace blocksci {
                     return tx.inputs()[0].getValue() == 1000000;
                 } else if (subtype.value() == "100k") {
                     return tx.inputs()[0].getValue() == 100000;
-                } else {
-                    return false;
                 }
+                throw std::logic_error("validated Whirlpool subtype did not select a denomination");
             }
             if (type == "ashigaru") {
                 auto isAshigaru = isAshigaruCoinJoin(tx);
@@ -1267,15 +1284,14 @@ namespace blocksci {
                     return tx.outputs()[0].getValue() == 25000000;
                 } else if (subtype.value() == "2.5m") {
                     return tx.outputs()[0].getValue() == 2500000;
-                } else {
-                    return false;
                 }
+                throw std::logic_error("validated Ashigaru subtype did not select a denomination");
             }
             if (type == "joinmarket") {
                 return isJoinMarketCoinJoin(tx);
             }
 
-            return false;
+            throw std::logic_error("validated coinjoin_type did not select a detector");
         }
 
         CoinJoinType getCoinjoinTag(const Transaction &tx) {

@@ -32,6 +32,19 @@ def test_coinjoin_clustering_requires_a_type(linked_coinjoin_chain, tmpdir_facto
         )
 
 
+@pytest.mark.btc
+def test_coinjoin_clustering_rejects_unknown_type(linked_coinjoin_chain, tmpdir_factory):
+    with pytest.raises(ValueError, match="unknown coinjoin_type 'wasbai2'"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("unknown-coinjoin-clustering")),
+            coinjoin_type="wasbai2",
+        )
+
+
 def test_clustering_default_heuristic(chain, tmpdir_factory):
     """Tests that we can run create_clustering with path and chain only"""
     blocksci.cluster.ClusterManager.create_clustering(
