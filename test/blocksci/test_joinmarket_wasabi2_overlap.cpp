@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <new>
 #include <optional>
+#include <stdexcept>
 
 namespace {
 
@@ -61,6 +62,14 @@ TEST(JoinMarketCoinJoinTest, RecognizesOverlapButClassifiesAsWasabi2) {
     EXPECT_TRUE(blocksci::heuristics::isCoinjoinOfGivenType(overlap.transaction, "joinmarket"));
     EXPECT_EQ(blocksci::heuristics::getCoinjoinTag(overlap.transaction),
               blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs);
+}
+
+TEST(JoinMarketCoinJoinTest, RejectsWasabi2OnlyMinInputCountOverride) {
+    SyntheticWasabi2JoinMarketOverlap overlap;
+
+    EXPECT_THROW(blocksci::heuristics::isCoinjoinOfGivenType(
+                     overlap.transaction, "joinmarket", std::nullopt, std::optional<uint64_t>{5}),
+                 std::invalid_argument);
 }
 
 TEST(Wasabi2CoinJoinTest, AppliesMinInputCountOverride) {

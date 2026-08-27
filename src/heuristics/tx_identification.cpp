@@ -18,6 +18,7 @@
 #include <numeric>
 #include <optional>
 #include <range/v3/range_for.hpp>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -1215,8 +1216,16 @@ namespace blocksci {
             return ConsolidationType::None;
         }
 
+        void validateCoinjoinParameters(const std::string &type, std::optional<uint64_t> minInputCount) {
+            if (minInputCount.has_value() && type != "wasabi2") {
+                throw std::invalid_argument("min_input_count is only supported for coinjoin_type 'wasabi2'");
+            }
+        }
+
         bool isCoinjoinOfGivenType(const Transaction &tx, const std::string &type, std::optional<std::string> subtype,
                                    std::optional<uint64_t> minInputCount) {
+            validateCoinjoinParameters(type, minInputCount);
+
             if (type == "wasabi1") {
                 return isWasabi1CoinJoin(tx);
             }

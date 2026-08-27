@@ -94,6 +94,15 @@ namespace blocksci {
          */
         bool BLOCKSCI_EXPORT isAshigaruCoinJoin(const Transaction &tx);
         /**
+         * Validate parameters shared by CoinJoin filtering and clustering APIs.
+         *
+         * minInputCount is a Wasabi 2-specific threshold and cannot be used
+         * with another CoinJoin type.
+         */
+        void BLOCKSCI_EXPORT validateCoinjoinParameters(const std::string &type,
+                                                        std::optional<uint64_t> minInputCount = std::nullopt);
+
+        /**
          * Return whether the transaction matches the detector for the given
          * CoinJoin type; detectors may overlap.
          *
