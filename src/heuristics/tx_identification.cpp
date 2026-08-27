@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace blocksci {
     namespace heuristics {
@@ -339,6 +340,55 @@ namespace blocksci {
                 } else {
                     return ranges::nullopt;
                 }
+            }
+
+            struct SubtypeDenomination {
+                const char *name;
+                int64_t value;
+            };
+
+            /**
+             * The official pool denominations of the two protocols that have pools.
+             *
+             * The detectors, validateCoinjoinParameters and isCoinjoinOfGivenType all resolve pools
+             * through these tables, so a new pool is added once here instead of in a detector check,
+             * a validation list and a dispatch chain that can drift apart.
+             */
+            const std::vector<SubtypeDenomination> &whirlpoolPools() {
+                static const std::vector<SubtypeDenomination> pools{
+                    {"50m", 50000000}, {"5m", 5000000}, {"1m", 1000000}, {"100k", 100000}};
+                return pools;
+            }
+
+            const std::vector<SubtypeDenomination> &ashigaruPools() {
+                static const std::vector<SubtypeDenomination> pools{{"25m", 25000000}, {"2.5m", 2500000}};
+                return pools;
+            }
+
+            /** The pools a detector exposes as subtypes; detectors without pools have no entries. */
+            const std::vector<SubtypeDenomination> &subtypeDenominations(const std::string &type) {
+                static const std::vector<SubtypeDenomination> none{};
+                if (type == "whirlpool") {
+                    return whirlpoolPools();
+                }
+                if (type == "ashigaru") {
+                    return ashigaruPools();
+                }
+                return none;
+            }
+
+            bool isPoolDenomination(const std::vector<SubtypeDenomination> &pools, int64_t value) {
+                return std::any_of(pools.begin(), pools.end(),
+                                   [value](const SubtypeDenomination &pool) { return pool.value == value; });
+            }
+
+            std::optional<int64_t> denominationForSubtype(const std::string &type, const std::string &subtype) {
+                for (const auto &entry : subtypeDenominations(type)) {
+                    if (subtype == entry.name) {
+                        return entry.value;
+                    }
+                }
+                return std::nullopt;
             }
         }  // namespace
 
@@ -843,8 +893,7 @@ namespace blocksci {
 
             auto current_pool_size = tx.outputs()[0].getValue();
 
-            if (current_pool_size != 50000000 && current_pool_size != 5000000 && current_pool_size != 1000000 &&
-                current_pool_size != 100000) {
+            if (!isPoolDenomination(whirlpoolPools(), current_pool_size)) {
                 return false;
             }
             auto input_count = tx.inputCount();
@@ -897,8 +946,7 @@ namespace blocksci {
 
             auto current_pool_size = tx.outputs()[0].getValue();
 
-            // pool size are 0.25 BTC and 0.025 BTC
-            if (current_pool_size != 25000000 && current_pool_size != 2500000) {
+            if (!isPoolDenomination(ashigaruPools(), current_pool_size)) {
                 return false;
             }
             auto input_count = tx.inputCount();
@@ -1231,10 +1279,7 @@ namespace blocksci {
             }
 
             const auto &value = subtype.value();
-            const bool validWhirlpoolSubtype =
-                type == "whirlpool" && (value == "50m" || value == "5m" || value == "1m" || value == "100k");
-            const bool validAshigaruSubtype = type == "ashigaru" && (value == "25m" || value == "2.5m");
-            if (!validWhirlpoolSubtype && !validAshigaruSubtype) {
+            if (!denominationForSubtype(type, value).has_value()) {
                 throw std::invalid_argument("unknown coinjoin_subtype '" + value + "' for coinjoin_type '" + type +
                                             "'");
             }
@@ -1258,17 +1303,12 @@ namespace blocksci {
                 if (!subtype.has_value()) {
                     return isCoinjoin;
                 }
-                // 0.001 BTC, 0.01 BTC, 0.05 BTC, and 0.5 BTC (to satoshis)
-                if (subtype.value() == "50m") {
-                    return tx.inputs()[0].getValue() == 50000000;
-                } else if (subtype.value() == "5m") {
-                    return tx.inputs()[0].getValue() == 5000000;
-                } else if (subtype.value() == "1m") {
-                    return tx.inputs()[0].getValue() == 1000000;
-                } else if (subtype.value() == "100k") {
-                    return tx.inputs()[0].getValue() == 100000;
+                // The pool is the first input's value; denominations live in subtypeDenominations.
+                auto denomination = denominationForSubtype(type, subtype.value());
+                if (!denomination.has_value()) {
+                    throw std::logic_error("validated Whirlpool subtype did not select a denomination");
                 }
-                throw std::logic_error("validated Whirlpool subtype did not select a denomination");
+                return tx.inputs()[0].getValue() == denomination.value();
             }
             if (type == "ashigaru") {
                 auto isAshigaru = isAshigaruCoinJoin(tx);
@@ -1280,12 +1320,11 @@ namespace blocksci {
                 }
                 // Inputs may differ slightly from the pool denomination; the
                 // equal-valued outputs define the Ashigaru pool instead.
-                if (subtype.value() == "25m") {
-                    return tx.outputs()[0].getValue() == 25000000;
-                } else if (subtype.value() == "2.5m") {
-                    return tx.outputs()[0].getValue() == 2500000;
+                auto denomination = denominationForSubtype(type, subtype.value());
+                if (!denomination.has_value()) {
+                    throw std::logic_error("validated Ashigaru subtype did not select a denomination");
                 }
-                throw std::logic_error("validated Ashigaru subtype did not select a denomination");
+                return tx.outputs()[0].getValue() == denomination.value();
             }
             if (type == "joinmarket") {
                 return isJoinMarketCoinJoin(tx);
