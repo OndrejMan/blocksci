@@ -41,6 +41,21 @@ TEST(SegwitAddressTest, EncodesAndDecodesWitnessV0WithBech32) {
     EXPECT_EQ(decoded.second, witness_program);
 }
 
+TEST(SegwitAddressTest, RejectsInvalidEncodeInputsBeforeBech32Encoding) {
+    const std::vector<uint8_t> valid_program(20, 0x42);
+
+    EXPECT_EQ(segwit_addr::encode("bcrt", -1, valid_program), "");
+    EXPECT_EQ(segwit_addr::encode("bcrt", 32, valid_program), "");
+    EXPECT_EQ(segwit_addr::encode("bcrt", 0, std::vector<uint8_t>(21, 0x42)), "");
+    EXPECT_EQ(segwit_addr::encode("bcrt", 1, std::vector<uint8_t>(1, 0x42)), "");
+    EXPECT_EQ(segwit_addr::encode("bcrt", 1, std::vector<uint8_t>(41, 0x42)), "");
+}
+
+TEST(SegwitAddressTest, RejectsBech32ValuesOutsideFiveBitRange) {
+    EXPECT_EQ(bech32::encode("bcrt", std::vector<uint8_t>{32}), "");
+    EXPECT_EQ(bech32::encode("bcrt", std::vector<uint8_t>{255}), "");
+}
+
 // Witness version 0 must use Bech32 and version 1 and above must use Bech32m.
 // The same payload carrying the other variant's checksum has to be rejected.
 TEST(SegwitAddressTest, RejectsWitnessV0CarryingBech32mChecksum) {
