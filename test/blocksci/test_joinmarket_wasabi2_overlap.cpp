@@ -54,6 +54,14 @@ public:
 
 }  // namespace
 
+TEST(JoinMarketCoinJoinTest, ExcludesTransactionsRecognizedAsWasabi2) {
+    SyntheticWasabi2JoinMarketOverlap overlap;
+
+    ASSERT_TRUE(blocksci::heuristics::isWasabi2CoinJoin(overlap.transaction));
+    EXPECT_FALSE(blocksci::heuristics::isJoinMarketCoinJoin(overlap.transaction));
+    EXPECT_FALSE(blocksci::heuristics::isCoinjoinOfGivenType(overlap.transaction, "joinmarket"));
+}
+
 TEST(JoinMarketCoinJoinTest, RejectsWasabi2OnlyMinInputCountOverride) {
     SyntheticWasabi2JoinMarketOverlap overlap;
 
