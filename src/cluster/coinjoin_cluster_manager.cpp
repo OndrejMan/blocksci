@@ -420,7 +420,7 @@ namespace blocksci {
 
     CoinjoinClusterManager CoinjoinClusterManager::createClustering(
         BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-        const std::string &outputPath, bool overwrite, std::string coinjoinType, int maxHops,
+        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
         std::optional<uint64_t> minInputCount) {
         if (minInputCount.has_value() && coinjoinType != "wasabi2") {
             throw std::invalid_argument("min_input_count is only supported for coinjoin_type 'wasabi2'");
