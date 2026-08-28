@@ -585,8 +585,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     // sort "certain" and "possible" txes by total output value
                     auto sortingFn = [](const Transaction &tx1, const Transaction &tx2) {
                         auto sumFn = [](int64_t sum, const Output &output) { return sum + output.getValue(); };
-                        return std::accumulate(tx1.outputs().begin(), tx1.outputs().end(), 0, sumFn) >
-                               std::accumulate(tx2.outputs().begin(), tx2.outputs().end(), 0, sumFn);
+                        return std::accumulate(tx1.outputs().begin(), tx1.outputs().end(), int64_t{0}, sumFn) >
+                               std::accumulate(tx2.outputs().begin(), tx2.outputs().end(), int64_t{0}, sumFn);
                     };
                     std::sort(result["certain"].begin(), result["certain"].end(), sortingFn);
 
