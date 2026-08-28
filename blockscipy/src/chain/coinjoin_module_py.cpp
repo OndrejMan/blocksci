@@ -3,11 +3,14 @@
 #include <blocksci/address/address.hpp>
 #include <blocksci/chain/access.hpp>
 #include <blocksci/chain/blockchain.hpp>
+#include <blocksci/chain/coinjoin_link_reduction.hpp>
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
+#include <cmath>
 #include <optional>
 #include <queue>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 
@@ -23,12 +26,39 @@ using namespace blocksci;
 
 using json = nlohmann::json;
 
+std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) {
+    if (minInputCount.has_value() && minInputCount.value() < 0) {
+        throw std::invalid_argument("min_input_count must be non-negative");
+    }
+    if (!minInputCount.has_value()) {
+        return std::nullopt;
+    }
+    return static_cast<uint64_t>(minInputCount.value());
+}
+
+blocksci::heuristics::CoinjoinDetector makeCoinjoinDetector(const std::string &coinjoinType,
+                                                             std::optional<int> minInputCount,
+                                                             std::optional<std::string> subtype = std::nullopt) {
+    return {coinjoinType, subtype, validateMinInputCount(minInputCount)};
+}
+
+void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) {
+    if (minBaseFee < 0) {
+        throw std::invalid_argument("min_base_fee must be non-negative");
+    }
+    if (!std::isfinite(percentageFee) || percentageFee < 0.0 || percentageFee > 1.0) {
+        throw std::invalid_argument("percentage_fee must be finite and between 0 and 1");
+    }
+}
+
 std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto txes = chain[{start, stop}].filter(
-        [&](const Transaction &tx) { return blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType, subtype); });
+    auto detector = makeCoinjoinDetector(coinjoinType, minInputCount, subtype);
+    auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
+        return detector(tx);
+    });
 
     if (txes.empty()) {
         return {};
@@ -37,34 +67,15 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     // filter txes which are not connected to any other coinjoin tx
     std::unordered_set<Transaction> txSet;
     for (const auto &tx : txes) {
-        txSet.insert(tx);
-    }
-
-    std::unordered_set<Transaction> result;
-    result.insert(txes[0]);
-
-    for (const auto &tx : txSet) {
         if (falsePositives.has_value() &&
             falsePositives.value().find(tx.getHash().GetHex()) != falsePositives.value().end()) {
             continue;
         }
-        for (const auto &input : tx.inputs()) {
-            if (txSet.find(input.getSpentTx()) != txSet.end()) {
-                result.insert(tx);
-                if (minInputCount.has_value()) {
-                    for (const auto &output : tx.outputs()) {
-                        if (!output.isSpent()) continue;
-                        if (blocksci::heuristics::isCoinjoinOfGivenType(output.getSpendingTx().value(), coinjoinType,
-                                                                        subtype, minInputCount)) {
-                            result.insert(tx);
-                        }
-                    }
-                }
-                break;
-            }
-        }
+        txSet.insert(tx);
     }
-    return result;
+
+    return detail::findLinkedCoinjoinTransactions(
+        txSet, [](const auto &tx) { return tx.inputs(); }, [](const auto &input) { return input.getSpentTx(); });
 }
 
 using LevelType = uint32_t;
@@ -76,7 +87,8 @@ using ConsolidationResultType = std::unordered_map<Transaction, ConsolidationTyp
 ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int maxLevel, std::string coinjoinType) {
     ConsolidationResultType result;
     result[tx] = {};
-    if (!blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType)) {
+    auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
+    if (!detector(tx)) {
         return result;
     }
 
@@ -85,7 +97,7 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
     // Then we build other levels by merging the sets of outputs of the transactions in the previous level.
     std::unordered_map<Transaction, std::unordered_set<Output>> seen;
     std::unordered_set<Transaction> bfsProcessed;
-    std::queue<std::pair<const Transaction &, int>> bfsQueue;
+    std::queue<std::pair<Transaction, int>> bfsQueue;
     std::unordered_map<int, std::unordered_set<Transaction>> txesByLevel;
     bfsQueue.push({tx, 0});
     bfsProcessed.insert(tx);
@@ -97,14 +109,15 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
         for (const auto &output : currentTx.outputs()) {
             if (!output.isSpent()) continue;
             auto spendingTx = output.getSpendingTx().value();
+            const auto nextLevel = level + 1;
+            if (nextLevel > maxLevel) {
+                continue;
+            }
             if (bfsProcessed.find(spendingTx) != bfsProcessed.end()) {
                 continue;
             }
             bfsProcessed.insert(spendingTx);
-            bfsQueue.push({spendingTx, level + 1});
-            if (level + 1 > maxLevel) {
-                continue;
-            }
+            bfsQueue.push({spendingTx, nextLevel});
             if (seen.find(spendingTx) == seen.end()) {
                 seen[spendingTx] = {};
             }
@@ -150,6 +163,7 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
 
 ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeight start, BlockHeight stop,
                                                     std::string coinjoinType, int maxLevel) {
+    blocksci::heuristics::validateCoinjoinParameters(coinjoinType);
     ConsolidationResultType result;
 
     using MapType = ConsolidationResultType;
@@ -319,8 +333,59 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<int> minInputCount) {
                 return findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, std::nullopt, minInputCount);
             },
-            "Filter coinjoin transactions", pybind11::arg("start"), pybind11::arg("stop"),
+            "Return CoinJoin candidates that are directly linked to another candidate in the selected block range",
+            pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("coinjoin_type"), pybind11::arg("min_input_count") = std::nullopt)
+        .def(
+            "filter_coinjoin_txes_raw",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
+               std::optional<int> minInputCount) {
+                auto detector = makeCoinjoinDetector(coinjoinType, minInputCount);
+                py::gil_scoped_release release;
+                return chain[{start, stop}].filter([&](const Transaction &tx) {
+                    return detector(tx);
+                });
+            },
+            "Filter all transaction-level CoinJoin heuristic matches without linked-transaction reduction",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"),
+            pybind11::arg("min_input_count") = std::nullopt)
+        .def(
+            "scan_coinjoins_by_subset_matching",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,
+               double percentageFee, size_t maxDepth) {
+                if (detector != "possible" && detector != "definite") {
+                    throw std::invalid_argument("detector must be \"possible\" or \"definite\", got: " + detector);
+                }
+                validateSubsetMatchingParameters(minBaseFee, percentageFee);
+                bool usePossible = detector == "possible";
+
+                std::vector<Transaction> detected;
+                std::vector<Transaction> skipped;
+                {
+                    py::gil_scoped_release release;
+                    for (auto block : chain[{start, stop}]) {
+                        for (auto tx : block) {
+                            auto result =
+                                usePossible
+                                    ? blocksci::heuristics::isPossibleCoinjoin(tx, minBaseFee, percentageFee, maxDepth)
+                                    : blocksci::heuristics::isCoinjoinExtra(tx, minBaseFee, percentageFee, maxDepth);
+
+                            if (result == blocksci::heuristics::CoinJoinResult::True) {
+                                detected.push_back(tx);
+                            } else if (result == blocksci::heuristics::CoinJoinResult::Timeout) {
+                                skipped.push_back(tx);
+                            }
+                        }
+                    }
+                }
+                return py::make_tuple(detected, skipped);
+            },
+            "Scan the range with the input-subset-matching coinjoin detector. Not protocol-specific: the "
+            "\"possible\" and \"definite\" detectors match any transaction with equal-value outputs fundable by "
+            "distinct input subsets. Returns (detected, skipped); skipped are searches that hit max_depth.",
+            pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("detector") = "definite",
+            pybind11::arg("min_base_fee") = 5000, pybind11::arg("percentage_fee") = 0.00004,
+            pybind11::arg("max_depth") = 200000)
         .def(
             "find_hw_sw_coinjoins",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop) {
@@ -442,6 +507,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "get_coinjoin_consolidations",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, double inputOutputRatio,
                std::string coinjoinType, int maxHops) {
+                auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
                 using ResultType =
                     std::map<std::string, std::vector<Transaction>>;              // consolidation_type, [input_tx_hash]
                 using MapType = std::vector<std::pair<Transaction, ResultType>>;  // tx_hash, ResultType
@@ -454,7 +520,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 };
 
                 auto mapFunc = [&](const Transaction &tx) -> MapType {
-                    if (!blocksci::heuristics::isCoinjoinOfGivenType(tx, coinjoinType)) {
+                    if (!detector(tx)) {
                         return {};
                     }
 
@@ -462,7 +528,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     result["certain"] = {};
                     result["possible"] = {};
 
-                    std::queue<std::pair<const Transaction &, int>> bfsQueue;
+                    std::queue<std::pair<Transaction, int>> bfsQueue;
                     std::unordered_set<uint256> visited;
 
                     bfsQueue.push({tx, 0});
@@ -481,7 +547,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                             if (visited.count(spendingTx.getHash())) continue;
                             visited.insert(spendingTx.getHash());
 
-                            if (blocksci::heuristics::isCoinjoinOfGivenType(spendingTx, coinjoinType)) {
+                            if (detector(spendingTx)) {
                                 // bfs_queue.push({spending_tx, depth + 1});
                                 continue;
                             }
@@ -490,8 +556,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                             if (depth == 0) {
                                 bool allInputsFromCj = true;
                                 for (auto input : spendingTx.inputs()) {
-                                    if (!blocksci::heuristics::isCoinjoinOfGivenType(input.getSpentTx(),
-                                                                                     coinjoinType)) {
+                                    if (!detector(input.getSpentTx())) {
                                         allInputsFromCj = false;
                                         break;
                                     }
@@ -520,8 +585,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                     // sort "certain" and "possible" txes by total output value
                     auto sortingFn = [](const Transaction &tx1, const Transaction &tx2) {
                         auto sumFn = [](int64_t sum, const Output &output) { return sum + output.getValue(); };
-                        return std::accumulate(tx1.outputs().begin(), tx1.outputs().end(), 0, sumFn) >
-                               std::accumulate(tx2.outputs().begin(), tx2.outputs().end(), 0, sumFn);
+                        return std::accumulate(tx1.outputs().begin(), tx1.outputs().end(), int64_t{0}, sumFn) >
+                               std::accumulate(tx2.outputs().begin(), tx2.outputs().end(), int64_t{0}, sumFn);
                     };
                     std::sort(result["certain"].begin(), result["certain"].end(), sortingFn);
 
@@ -539,17 +604,23 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::string> coinjoinSubType, bool ignoreNonStandardDenominations, bool ignoreRemixes,
                std::optional<std::tuple<int64_t, int64_t>> ww2DenomsBucket,
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
+                blocksci::heuristics::validateCoinjoinParameters(coinjoinType, std::nullopt, coinjoinSubType);
                 std::unordered_map<std::string, std::unordered_set<Transaction>> cjsOfGivenType;
-                cjsOfGivenType["wasabi1"] =
-                    findLinkedCjTxes(start, stop, "wasabi1", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["wasabi2"] =
-                    findLinkedCjTxes(start, stop, "wasabi2", chain, std::nullopt, falseCoinjoins);
-                cjsOfGivenType["whirlpool"] =
-                    findLinkedCjTxes(start, stop, "whirlpool", chain, std::nullopt, falseCoinjoins);
+                std::unordered_set<Transaction> allCollectedCoinjoins;
+                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru", "joinmarket"}) {
+                    // Find links only between CoinJoins of the same type.
+                    auto coinjoins = findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
+                    allCollectedCoinjoins.insert(coinjoins.begin(), coinjoins.end());
+                    cjsOfGivenType.emplace(type, std::move(coinjoins));
+                }
                 if (coinjoinSubType.has_value()) {
                     cjsOfGivenType[coinjoinSubType.value()] =
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
                 }
+
+                auto isCollectedCoinjoin = [&](const Transaction &candidate) {
+                    return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
+                };
 
                 // CJTX and its anonymity sets
                 using AnonymitySetsFuncType = std::unordered_map<Transaction, std::unordered_map<int64_t, int64_t>>;
@@ -608,10 +679,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                                 continue;
                             }
                             auto spendingTx = output.getSpendingTx().value();
-                            if (ignoreRemixes &&
-                                !(cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                  cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                  cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end())) {
+                            if (ignoreRemixes && isCollectedCoinjoin(spendingTx)) {
                                 continue;
                             }
                         }
@@ -657,10 +725,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
 
                 auto decreaseAnonymityIfConsolidated = [&](const Transaction &tx) -> PointingToTransactionsType {
                     PointingToTransactionsType result;
-                    // if it _is_ coinjoin and we ignore remixes
-                    if (!(cjsOfGivenType["wasabi1"].find(tx) == cjsOfGivenType["wasabi1"].end() &&
-                          cjsOfGivenType["wasabi2"].find(tx) == cjsOfGivenType["wasabi2"].end() &&
-                          cjsOfGivenType["whirlpool"].find(tx) == cjsOfGivenType["whirlpool"].end())) {
+                    // A remix is not a consolidation when remix filtering is enabled.
+                    if (ignoreRemixes && isCollectedCoinjoin(tx)) {
                         return {};
                     }
 
@@ -748,9 +814,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                             raised++;
                         } else {
                             auto spendingTx = output.getSpendingTx().value();
-                            if (cjsOfGivenType["wasabi1"].find(spendingTx) == cjsOfGivenType["wasabi1"].end() &&
-                                cjsOfGivenType["wasabi2"].find(spendingTx) == cjsOfGivenType["wasabi2"].end() &&
-                                cjsOfGivenType["whirlpool"].find(spendingTx) == cjsOfGivenType["whirlpool"].end()) {
+                            if (!isCollectedCoinjoin(spendingTx)) {
                                 notRemixedOutputs++;
                                 raised++;
                             }

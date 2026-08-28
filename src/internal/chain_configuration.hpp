@@ -28,6 +28,7 @@ namespace blocksci {
         int64_t FirstWasabiBlock;
         int64_t FirstWasabi2Block;
         int64_t FirstWasabiNoCoordAddressBlock;
+        int64_t FirstAshigaruBlock;
     };
     
     struct ChainConfiguration {

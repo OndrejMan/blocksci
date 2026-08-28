@@ -6,7 +6,12 @@
 //
 
 #include "unit_test.h"
+#include <blocksci/chain/coinjoin_link_reduction.hpp>
+
 #include <iostream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace blocksci {
 
@@ -466,5 +471,24 @@ TEST_F(AlgorithmsTest, TotalFees) {
     ASSERT_EQ(amount, algo_amount);
 }
 
-}  // namespace blocksci
+TEST(CoinjoinLinkReductionTest, RetainsEveryParentOfAMultiParentCoinjoin) {
+    // Regression fixture: A and B are CoinJoins and C directly spends one
+    // output from each. The linked set must contain all three endpoints.
+    const std::unordered_set<std::string> candidates = {"A", "B", "C"};
+    const std::unordered_map<std::string, std::vector<std::string>> inputs = {
+        {"A", {}},
+        {"B", {}},
+        {"C", {"A", "B"}},
+    };
 
+    const auto linked = detail::findLinkedCoinjoinTransactions(
+        candidates,
+        [&inputs](const std::string &transaction) -> const std::vector<std::string> & {
+            return inputs.at(transaction);
+        },
+        [](const std::string &spentTransaction) { return spentTransaction; });
+
+    EXPECT_EQ(linked, candidates);
+}
+
+}  // namespace blocksci

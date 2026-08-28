@@ -1,5 +1,48 @@
+import pytest
+
 import blocksci
 from util import sorted_tx_list
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_rejects_min_input_count_for_non_wasabi2(
+    linked_coinjoin_chain, tmpdir_factory
+):
+    with pytest.raises(ValueError, match="min_input_count is only supported for coinjoin_type 'wasabi2'"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("invalid-coinjoin-clustering")),
+            coinjoin_type="joinmarket",
+            min_input_count=5,
+        )
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_requires_a_type(linked_coinjoin_chain, tmpdir_factory):
+    with pytest.raises(TypeError):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("untyped-coinjoin-clustering")),
+        )
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_rejects_unknown_type(linked_coinjoin_chain, tmpdir_factory):
+    with pytest.raises(ValueError, match="unknown coinjoin_type 'wasbai2'"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(tmpdir_factory.mktemp("unknown-coinjoin-clustering")),
+            coinjoin_type="wasbai2",
+        )
 
 
 def test_clustering_default_heuristic(chain, tmpdir_factory):
@@ -126,25 +169,21 @@ def test_clustering_composability(chain, tmpdir_factory):
             assert set(cl.addresses.to_list()) == set(other_cluster.addresses.to_list())
 
 
-def test_clustering_ignore_coinjoin(chain, json_data, tmpdir_factory, regtest):
-    addresses = (
-        chain.tx_with_hash(json_data["simple-coinjoin-tx"])
-        .inputs.map(lambda i: i.address)
-        .to_list()
-    )
+def test_clustering_ignore_coinjoin_preserves_regular_clusters(
+    chain, json_data, tmpdir_factory, regtest
+):
+    """Clustering with ignore_coinjoin=True must not disturb ordinary clusters.
 
+    The CoinJoin skipping itself is covered by
+    test_clustering_ignore_coinjoin_linked: no detector in the tree recognises
+    this fixture's `simple-coinjoin-tx`, so there is nothing here to ignore.
+    """
     cm = blocksci.cluster.ClusterManager.create_clustering(
         str(tmpdir_factory.mktemp("clustering")),
         chain,
         heuristic=blocksci.heuristics.change.none,
         ignore_coinjoin=True,
     )
-    cluster = cm.cluster_with_address(addresses[0])
-    cluster_addresses = cluster.addresses.to_list()
-    assert 3 == len(cluster)
-
-    for addr in addresses[1:]:
-        assert addr not in cluster_addresses
 
     # Normal clustering should still work as expected
     cluster = cm.cluster_with_address(
@@ -208,6 +247,46 @@ def test_clustering_cluster_coinjoin(chain, json_data, tmpdir_factory, regtest):
     )
 
     cluster_regtest(chain, json_data, regtest, cm)
+
+
+@pytest.mark.btc
+def test_clustering_ignore_coinjoin_linked(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory
+):
+    """ignore_coinjoin must skip transactions a detector actually recognises."""
+    coinjoin = linked_coinjoin_chain.tx_with_hash(
+        linked_coinjoin_data["linked-joinmarket-first-tx"]
+    )
+    assert coinjoin.is_joinmarket_coinjoin
+    assert blocksci.heuristics.is_coinjoin(coinjoin)
+
+    addresses = coinjoin.inputs.map(lambda i: i.address).to_list()
+    assert len(addresses) >= 2
+    assert len(set(addresses)) == len(addresses)
+
+    ignoring = blocksci.cluster.ClusterManager.create_clustering(
+        str(tmpdir_factory.mktemp("clustering_ignore")),
+        linked_coinjoin_chain,
+        heuristic=blocksci.heuristics.change.none,
+        ignore_coinjoin=True,
+    )
+    for addr in addresses:
+        cluster_addresses = ignoring.cluster_with_address(addr).addresses.to_list()
+        assert addr in cluster_addresses
+        for other in addresses:
+            if other != addr:
+                assert other not in cluster_addresses
+
+    # Without the option the same inputs are merged by the multi-input heuristic
+    clustering = blocksci.cluster.ClusterManager.create_clustering(
+        str(tmpdir_factory.mktemp("clustering_cluster")),
+        linked_coinjoin_chain,
+        heuristic=blocksci.heuristics.change.none,
+        ignore_coinjoin=False,
+    )
+    cluster_addresses = clustering.cluster_with_address(addresses[0]).addresses.to_list()
+    for addr in addresses:
+        assert addr in cluster_addresses
 
 
 def cluster_regtest(chain, json_data, regtest, cm):

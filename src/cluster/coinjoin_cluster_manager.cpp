@@ -22,6 +22,7 @@
 #include <nlohmann/json.hpp>
 #include <range/v3/range_for.hpp>
 #include <range/v3/view/iota.hpp>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -140,12 +141,13 @@ namespace blocksci {
         return clusterCount;
     }
 
-    std::unordered_set<Transaction> identifyCoinjoinTransactions(BlockRange &chain, const std::string &coinjoinType) {
+    std::unordered_set<Transaction> identifyCoinjoinTransactions(
+        BlockRange &chain, const heuristics::CoinjoinDetector &detector) {
         auto mapFunc = [&](const BlockRange &blocks) {
             std::unordered_set<Transaction> localCoinjoinTransactions;
             for (const auto &block : blocks) {
                 for (const auto &tx : block) {
-                    if (heuristics::isCoinjoinOfGivenType(tx, coinjoinType)) {
+                    if (detector(tx)) {
                         localCoinjoinTransactions.insert(tx);
                     }
                 }
@@ -418,11 +420,14 @@ namespace blocksci {
 
     CoinjoinClusterManager CoinjoinClusterManager::createClustering(
         BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-        const std::string &outputPath, bool overwrite, std::string coinjoinType, int maxHops) {
+        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
+        std::optional<uint64_t> minInputCount) {
+        heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
+
         ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
 
         auto &scripts = chain.getAccess().getScripts();
-        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, coinjoinType);
+        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
         auto collectedAddresses = collectAddressesWithinHops(coinjoinTransactions, maxHops);
 
         std::cout << "Collected " << collectedAddresses.size() << " addresses" << std::endl;

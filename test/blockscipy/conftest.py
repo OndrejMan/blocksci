@@ -3,6 +3,9 @@ import subprocess
 import os
 
 
+CHAIN_MARKERS = {"btc", "bch", "ltc"}
+
+
 def pytest_addoption(parser):
     parser.addoption("--btc", action="store_true", help="Run tests for Bitcoin")
     parser.addoption("--bch", action="store_true", help="Run tests for Bitcoin Cash")
@@ -24,12 +27,13 @@ def pytest_generate_tests(metafunc):
 
 
 def pytest_runtest_call(item):
-    markers = [x.name for x in item.iter_markers()]
-    if markers:
-        if item.funcargs["chain_name"] not in markers:
-            pytest.skip(
-                "Skipping test for chain {}".format(item.funcargs["chain_name"])
-            )
+    chain_markers = {marker.name for marker in item.iter_markers()} & CHAIN_MARKERS
+    if chain_markers:
+        # chain_name is parametrized for every test, but it only shows up in
+        # funcargs for tests that request a chain fixture.
+        chain_name = item.callspec.params["chain_name"]
+        if chain_name not in chain_markers:
+            pytest.skip("Skipping test for chain {}".format(chain_name))
 
 
 @pytest.fixture(scope="session")
@@ -78,4 +82,45 @@ def json_data(chain_name):
     import json
 
     with open("../files/{}/output.json".format(chain_name), "r") as f:
+        return json.load(f)
+
+
+@pytest.fixture(scope="session")
+def linked_coinjoin_chain(tmpdir_factory):
+    """A regtest chain whose CoinJoins are recognised by the JoinMarket detector.
+
+    The main regtest fixture cannot be used for protocol detection: every
+    detector except JoinMarket is gated on mainnet block heights, and its
+    coinjoin motif has too few equal outputs for JoinMarket to fire.
+    """
+    chain_dir = str(tmpdir_factory.mktemp("linked_coinjoin"))
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    fixture_dir = os.path.join(self_dir, "../files/linked-coinjoin/btc/regtest")
+    config_path = os.path.join(chain_dir, "config.json")
+
+    subprocess.run(
+        [
+            "blocksci_parser",
+            config_path,
+            "generate-config",
+            "bitcoin_regtest",
+            chain_dir,
+            "--disk",
+            fixture_dir,
+        ],
+        check=True,
+    )
+    subprocess.run(["blocksci_parser", config_path, "update"], check=True)
+
+    import blocksci
+    return blocksci.Blockchain(config_path)
+
+
+@pytest.fixture
+def linked_coinjoin_data():
+    import json
+
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(self_dir, "../files/linked-coinjoin/btc/output.json")
+    with open(path, "r") as f:
         return json.load(f)
