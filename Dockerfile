@@ -2,6 +2,9 @@
 # `dependencies` stage below; --build-arg DEPS_IMAGE=<prebuilt dependency image>
 # reuses an existing toolchain instead of rebuilding it.
 ARG DEPS_IMAGE=dependencies
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.1
+
+FROM ${UV_IMAGE} AS uv
 
 # Use Ubuntu 20.04 LTS as the base image
 FROM ubuntu:20.04 AS dependencies
@@ -25,7 +28,7 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
 WORKDIR /blocksci
 
 # Install uv. Update the release tag here when a newer version is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
+COPY --from=uv /uv /uvx /bin/
 
 RUN uv python install 3.8.20
 RUN uv python pin 3.8.20
