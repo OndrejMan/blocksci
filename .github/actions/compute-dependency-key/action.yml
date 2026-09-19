@@ -1,0 +1,51 @@
+name: Compute dependency image key
+description: Compute the stable and optional run-scoped dependency image tags.
+
+inputs:
+  repository-root:
+    description: Repository root containing the dependency image inputs.
+    required: false
+    default: "."
+  platforms:
+    description: Comma-separated Docker platforms included in the key.
+    required: true
+  key-version:
+    description: Version of the dependency key format.
+    required: false
+    default: "1"
+  provisional-run-id:
+    description: Optional run identifier used to produce a provisional tag.
+    required: false
+    default: ""
+
+outputs:
+  base_tag:
+    description: Stable input-derived tag.
+    value: ${{ steps.key.outputs.base_tag }}
+  provisional_tag:
+    description: Run-scoped tag, or empty when no run identifier was supplied.
+    value: ${{ steps.key.outputs.provisional_tag }}
+
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      env:
+        REPOSITORY_ROOT: ${{ inputs.repository-root }}
+        PLATFORMS: ${{ inputs.platforms }}
+        KEY_VERSION: ${{ inputs.key-version }}
+        PROVISIONAL_RUN_ID: ${{ inputs.provisional-run-id }}
+      run: |
+        set -euo pipefail
+        tag_script="${GITHUB_ACTION_PATH}/../../scripts/dependency-image-tag.sh"
+        base_tag="$(bash "$tag_script" \
+          "$REPOSITORY_ROOT" "$PLATFORMS" false "$KEY_VERSION")"
+        provisional_tag=""
+        if [ -n "$PROVISIONAL_RUN_ID" ]; then
+          provisional_tag="$(bash "$tag_script" \
+            "$REPOSITORY_ROOT" "$PLATFORMS" true "$KEY_VERSION" \
+            "$PROVISIONAL_RUN_ID")"
+        fi
+        echo "base_tag=${base_tag}" >> "$GITHUB_OUTPUT"
+        echo "provisional_tag=${provisional_tag}" >> "$GITHUB_OUTPUT"

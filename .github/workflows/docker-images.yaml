@@ -1,0 +1,343 @@
+name: Build and publish Docker images
+
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_dependencies:
+        description: Rebuild the dependency image even when its input-derived tag exists
+        required: false
+        default: false
+        type: boolean
+      build_x86:
+        description: Build and test linux/amd64 for this manual run
+        required: false
+        default: "on"
+        type: choice
+        options: ["on", "off"]
+      build_arm:
+        description: Build and test linux/arm64 for this manual run
+        required: false
+        default: "on"
+        type: choice
+        options: ["on", "off"]
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DEPENDENCY_KEY_VERSION: "1"
+
+jobs:
+  dependencies:
+    name: Ensure dependency image
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    outputs:
+      base_image: ${{ steps.image_names.outputs.base_image }}
+      complete_image: ${{ steps.image_names.outputs.complete_image }}
+      platforms: ${{ steps.platforms.outputs.platforms }}
+      platform_matrix: ${{ steps.test_platforms.outputs.matrix }}
+      # What build_candidate pins: the verified input-derived tag when the toolchain
+      # is reused, the run-scoped tag when it was rebuilt in this run.
+      dependency_tag: ${{ steps.dependency_image.outputs.tag }}
+      dependency_base_tag: ${{ steps.dependency_key.outputs.base_tag }}
+      dependency_published: ${{ steps.dependency_image.outputs.needs_build }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set image names
+        id: image_names
+        shell: bash
+        run: |
+          echo "base_image=${REGISTRY}/${GITHUB_REPOSITORY,,}-cj" >> "$GITHUB_OUTPUT"
+          echo "complete_image=${REGISTRY}/${GITHUB_REPOSITORY,,}-complete" >> "$GITHUB_OUTPUT"
+
+      - name: Select target platforms
+        id: platforms
+        uses: ./.github/actions/select-platforms
+        with:
+          build-x86: ${{ github.event_name == 'workflow_dispatch' && inputs.build_x86 || vars.BUILD_X86 }}
+          build-arm: ${{ github.event_name == 'workflow_dispatch' && inputs.build_arm || vars.BUILD_ARM }}
+
+      - name: Create test platform matrix
+        id: test_platforms
+        shell: bash
+        env:
+          PLATFORMS: ${{ steps.platforms.outputs.platforms }}
+        run: |
+          set -euo pipefail
+          platform_matrix="["
+          IFS=',' read -r -a selected_platforms <<< "$PLATFORMS"
+          for platform in "${selected_platforms[@]}"; do
+            platform_matrix+="\"${platform}\","
+          done
+          echo "matrix=${platform_matrix%,}]" >> "$GITHUB_OUTPUT"
+
+      - name: Compute dependency image tag
+        id: dependency_key
+        uses: ./.github/actions/compute-dependency-key
+        with:
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          key-version: ${{ env.DEPENDENCY_KEY_VERSION }}
+          provisional-run-id: ${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Set up QEMU
+        if: ${{ contains(steps.platforms.outputs.platforms, 'arm64') }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve dependency image
+        id: dependency_image
+        uses: ./.github/actions/resolve-dependency-image
+        with:
+          base-image: ${{ steps.image_names.outputs.base_image }}
+          base-tag: ${{ steps.dependency_key.outputs.base_tag }}
+          fallback-tag: ${{ steps.dependency_key.outputs.provisional_tag }}
+          force-rebuild: ${{ inputs.rebuild_dependencies }}
+
+      - name: Extract dependency image metadata
+        id: metadata
+        if: ${{ steps.dependency_image.outputs.needs_build == 'true' }}
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image_names.outputs.base_image }}
+          tags: |
+            type=raw,value=${{ steps.dependency_image.outputs.tag }}
+
+      - name: Build and push dependency image
+        if: ${{ steps.dependency_image.outputs.needs_build == 'true' }}
+        uses: docker/build-push-action@v7
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          context: .
+          file: Dockerfile
+          target: dependencies
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: false
+
+  build_candidate:
+    name: Build test candidate image
+    needs: dependencies
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    outputs:
+      candidate_image: ${{ steps.candidate.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU
+        if: ${{ contains(needs.dependencies.outputs.platforms, 'arm64') }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set candidate image name
+        id: candidate
+        shell: bash
+        env:
+          COMPLETE_IMAGE: ${{ needs.dependencies.outputs.complete_image }}
+        run: |
+          echo "image=${COMPLETE_IMAGE}:ci-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Extract candidate image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ needs.dependencies.outputs.complete_image }}
+          tags: |
+            type=raw,value=ci-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Build and push candidate image without tests
+        uses: docker/build-push-action@v7
+        env:
+          BUILDKIT_PROGRESS: plain
+        with:
+          context: .
+          file: Dockerfile
+          # `complete` is the shipped stage: sources compiled, tests not built
+          # in. DEPS_IMAGE points at the input-derived dependency image tag, so the
+          # dependencies stage is not part of this build graph at all.
+          target: complete
+          platforms: ${{ needs.dependencies.outputs.platforms }}
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: false
+          # Scoped by the input-derived tag, never the run-scoped one: a rebuilt
+          # toolchain would otherwise write to a scope unique to its run, which
+          # nothing -- not the next push, not any pull request -- ever reads.
+          cache-from: type=gha,scope=complete-${{ needs.dependencies.outputs.dependency_base_tag }}
+          cache-to: type=gha,mode=max,scope=complete-${{ needs.dependencies.outputs.dependency_base_tag }}
+          build-args: |
+            NTHREADS=${{ vars.BLOCKSCI_NTHREADS || '1' }}
+            DEPS_IMAGE=${{ needs.dependencies.outputs.base_image }}:${{ needs.dependencies.outputs.dependency_tag }}
+            RUN_CPP_TESTS=0
+            RUN_PYTHON_TESTS=0
+
+  cpp_tests:
+    name: Run C++ tests (${{ matrix.platform }})
+    needs: [dependencies, build_candidate]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.dependencies.outputs.platform_matrix) }}
+    steps:
+      - name: Set up QEMU
+        if: ${{ matrix.platform == 'linux/arm64' }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run C++ tests in candidate image
+        shell: bash
+        env:
+          CANDIDATE_IMAGE: ${{ needs.build_candidate.outputs.candidate_image }}
+          NTHREADS: ${{ vars.BLOCKSCI_NTHREADS || '1' }}
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -e TEST_ONLY=1 -e RUN_CPP_TESTS=1 -e RUN_PYTHON_TESTS=0 -e NTHREADS \
+            "$CANDIDATE_IMAGE" /mnt/blocksci/build.sh
+
+  python_tests:
+    name: Run Python tests (${{ matrix.platform }})
+    needs: [dependencies, build_candidate]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.dependencies.outputs.platform_matrix) }}
+    steps:
+      - name: Set up QEMU
+        if: ${{ matrix.platform == 'linux/arm64' }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Python tests in candidate image
+        shell: bash
+        env:
+          CANDIDATE_IMAGE: ${{ needs.build_candidate.outputs.candidate_image }}
+          NTHREADS: ${{ vars.BLOCKSCI_NTHREADS || '1' }}
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -e TEST_ONLY=1 -e RUN_CPP_TESTS=0 -e RUN_PYTHON_TESTS=1 -e NTHREADS \
+            "$CANDIDATE_IMAGE" /mnt/blocksci/build.sh
+
+  publish_complete:
+    name: Publish verified complete image
+    needs: [dependencies, build_candidate, cpp_tests, python_tests]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 300
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish commit tag
+        shell: bash
+        env:
+          CANDIDATE_IMAGE: ${{ needs.build_candidate.outputs.candidate_image }}
+          COMPLETE_IMAGE: ${{ needs.dependencies.outputs.complete_image }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${COMPLETE_IMAGE}:sha-${GITHUB_SHA}" \
+            "$CANDIDATE_IMAGE"
+
+      - name: Promote the dependency image onto its input-derived tag
+        if: ${{ github.ref_name == github.event.repository.default_branch && needs.dependencies.outputs.dependency_published == 'true' }}
+        shell: bash
+        env:
+          BASE_IMAGE: ${{ needs.dependencies.outputs.base_image }}
+          DEPENDENCY_TAG: ${{ needs.dependencies.outputs.dependency_tag }}
+          DEPENDENCY_BASE_TAG: ${{ needs.dependencies.outputs.dependency_base_tag }}
+        run: |
+          set -euo pipefail
+          # The toolchain was built in this run and published under a run-scoped
+          # tag, so until now the input-derived tag still resolved to the last
+          # toolchain that passed its suites. They have passed, so move the
+          # input-derived tag onto this one. A run whose suites fail never becomes
+          # what later pushes and pull requests pin.
+          docker buildx imagetools create \
+            --tag "${BASE_IMAGE}:${DEPENDENCY_BASE_TAG}" \
+            "${BASE_IMAGE}:${DEPENDENCY_TAG}"
+
+      - name: Update dependency latest tag
+        if: ${{ github.ref_name == github.event.repository.default_branch }}
+        shell: bash
+        env:
+          BASE_IMAGE: ${{ needs.dependencies.outputs.base_image }}
+          DEPENDENCY_BASE_TAG: ${{ needs.dependencies.outputs.dependency_base_tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${BASE_IMAGE}:latest" \
+            "${BASE_IMAGE}:${DEPENDENCY_BASE_TAG}"
+
+      - name: Update complete latest tag
+        if: ${{ github.ref_name == github.event.repository.default_branch }}
+        shell: bash
+        env:
+          CANDIDATE_IMAGE: ${{ needs.build_candidate.outputs.candidate_image }}
+          COMPLETE_IMAGE: ${{ needs.dependencies.outputs.complete_image }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${COMPLETE_IMAGE}:latest" \
+            "$CANDIDATE_IMAGE"

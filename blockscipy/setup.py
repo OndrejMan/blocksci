@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 import platform
 import subprocess
@@ -47,7 +48,7 @@ class CMakeBuild(build_ext):
             build_args += ['--', '/m']
         else:
             cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-            build_args += ['--', '-j4']
+            build_args += ['--', '-j{}'.format(os.environ.get('NTHREADS', '4'))]
 
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),
@@ -56,6 +57,13 @@ class CMakeBuild(build_ext):
             os.makedirs(self.build_temp)
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
+
+        compile_commands_output = env.get('BLOCKSCIPY_COMPILE_COMMANDS_OUTPUT')
+        if compile_commands_output:
+            compile_commands = os.path.join(self.build_temp, 'compile_commands.json')
+            if not os.path.isfile(compile_commands):
+                raise RuntimeError("CMake did not generate BlockSciPy compile_commands.json")
+            shutil.copyfile(compile_commands, compile_commands_output)
 
 setup(
     name='blocksci',
@@ -72,7 +80,7 @@ setup(
     install_requires=[
         'multiprocess>=0.70.5',
         'psutil>=5.4.2',
-        'pycrypto>=2.6.1',
+        'pycryptodome>=3.21.0',
         'pandas>=0.22.0',
         'dateparser>=0.6.0',
         'requests>=2.19.1'
