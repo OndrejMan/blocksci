@@ -56,11 +56,11 @@ namespace blocksci {
             for (int i = 0; i < INT_MAX; i++) {
                 denom *= 3;
                 auto next = denom * 2;
-                if (denom < minSatoshis) {
+                if (next < minSatoshis) {
                     continue;
                 }
 
-                if (denom > maxSatoshis) {
+                if (next > maxSatoshis) {
                     break;
                 }
 
@@ -88,11 +88,11 @@ namespace blocksci {
             for (int i = 0; i < INT_MAX; i++) {
                 denom *= 10;
                 auto a = denom * 2;
-                if (denom < minSatoshis) {
+                if (a < minSatoshis) {
                     continue;
                 }
 
-                if (denom > maxSatoshis) {
+                if (a > maxSatoshis) {
                     break;
                 }
 
@@ -103,13 +103,13 @@ namespace blocksci {
             // Powers of 10 * 5 (1-2-5 series)
             for (int i = 0; i < INT_MAX; i++) {
                 denom *= 10;
-                auto a = denom * 2;
+                auto a = denom * 5;
 
-                if (denom < minSatoshis) {
+                if (a < minSatoshis) {
                     continue;
                 }
 
-                if (denom > maxSatoshis) {
+                if (a > maxSatoshis) {
                     break;
                 }
 
@@ -137,7 +137,9 @@ namespace blocksci {
         static inline int64_t FirstWasabiBlock = 530500;
         static inline int64_t FirstSamouraiBlock = 570000;
         static inline int64_t FirstWasabiNoCoordAddressBlock = 610000;
-        static inline int64_t FirstAshigaruBlock = 890000;  // a guess, but yea
+        /** Mainnet default, used when a chain configuration does not override it */
+        static constexpr int64_t DefaultFirstAshigaruBlock = 890000;  // a guess, but yea
+        static inline int64_t FirstAshigaruBlock = DefaultFirstAshigaruBlock;
     };
 
 }  // namespace blocksci

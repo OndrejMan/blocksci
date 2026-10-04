@@ -3,6 +3,9 @@ import subprocess
 import os
 
 
+CHAIN_MARKERS = {"btc", "local"}
+
+
 def pytest_addoption(parser):
     parser.addoption("--btc", action="store_true", help="Run tests for Bitcoin")
     parser.addoption("--local", action="store", default="default", help="Run tests against local chain (useful for benchmark)")
@@ -19,11 +22,12 @@ def pytest_generate_tests(metafunc):
 
 
 def pytest_runtest_call(item):
-    markers = [x.name for x in item.iter_markers()]
-    if markers:
-        if item.funcargs["chain_name"] not in markers:
+    chain_markers = {marker.name for marker in item.iter_markers()} & CHAIN_MARKERS
+    if chain_markers:
+        chain_name = item.callspec.params["chain_name"]
+        if chain_name not in chain_markers:
             pytest.skip(
-                "Skipping test for chain {}".format(item.funcargs["chain_name"])
+                "Skipping test for chain {}".format(chain_name)
             )
 
 

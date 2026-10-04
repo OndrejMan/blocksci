@@ -1,0 +1,45 @@
+name: Select target platforms
+description: >-
+  Resolve the Docker platform list from the BUILD_X86 / BUILD_ARM repository
+  variables. Unset values keep the architecture enabled, so the default stays a
+  full multi-arch build; only an explicit false/0/no/off drops one.
+
+inputs:
+  build-x86:
+    description: Value of the BUILD_X86 repository variable; empty means enabled.
+    required: false
+    default: ''
+  build-arm:
+    description: Value of the BUILD_ARM repository variable; empty means enabled.
+    required: false
+    default: ''
+
+outputs:
+  platforms:
+    description: Comma-separated Docker platform list, e.g. linux/amd64,linux/arm64.
+    value: ${{ steps.select.outputs.platforms }}
+
+runs:
+  using: composite
+  steps:
+    - id: select
+      shell: bash
+      env:
+        BUILD_X86: ${{ inputs.build-x86 }}
+        BUILD_ARM: ${{ inputs.build-arm }}
+      run: |
+        enabled() {
+          case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+            false|0|no|off) return 1 ;;
+            *) return 0 ;;
+          esac
+        }
+        platforms=""
+        enabled "$BUILD_X86" && platforms="linux/amd64"
+        enabled "$BUILD_ARM" && platforms="${platforms:+$platforms,}linux/arm64"
+        if [ -z "$platforms" ]; then
+          echo "::error::BUILD_X86 and BUILD_ARM are both disabled; nothing to build."
+          exit 1
+        fi
+        echo "Building for: $platforms"
+        echo "platforms=$platforms" >> "$GITHUB_OUTPUT"

@@ -42,6 +42,7 @@ struct AddWitnessUnknownMethods {
                 return ranges::nullopt;
             }
         }, "Witness stack of spending input");
+        func(property_tag, "address_string", &script::WitnessUnknown::addressString, "Bitcoin address string");
     }
 };
 

@@ -22,6 +22,7 @@
 #include <nlohmann/json.hpp>
 #include <range/v3/range_for.hpp>
 #include <range/v3/view/iota.hpp>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -140,12 +141,13 @@ namespace blocksci {
         return clusterCount;
     }
 
-    std::unordered_set<Transaction> identifyCoinjoinTransactions(BlockRange &chain, const std::string &coinjoinType) {
+    std::unordered_set<Transaction> identifyCoinjoinTransactions(
+        BlockRange &chain, const heuristics::CoinjoinDetector &detector) {
         auto mapFunc = [&](const BlockRange &blocks) {
             std::unordered_set<Transaction> localCoinjoinTransactions;
             for (const auto &block : blocks) {
                 for (const auto &tx : block) {
-                    if (heuristics::isCoinjoinOfGivenType(tx, coinjoinType)) {
+                    if (detector(tx)) {
                         localCoinjoinTransactions.insert(tx);
                     }
                 }
@@ -160,6 +162,28 @@ namespace blocksci {
         };
 
         return chain.mapReduce<std::unordered_set<Transaction>>(mapFunc, reduceFunc);
+    }
+
+    /**
+     * Use CoinJoin transactions found by an earlier detection step as the clustering seed.
+     * A transaction outside `chain` would be collected but never processed by the heuristics,
+     * so it is rejected instead of silently producing a partial clustering.
+     */
+    std::unordered_set<Transaction> seedTransactionsInRange(BlockRange &chain,
+                                                            const std::vector<Transaction> &transactions) {
+        std::unordered_set<Transaction> seeds;
+        for (const auto &tx : transactions) {
+            if (&tx.getAccess() != &chain.getAccess()) {
+                throw std::invalid_argument("coinjoin_txes contains a transaction from a different chain instance");
+            }
+            auto height = tx.getBlockHeight();
+            if (height < chain.sl.start || height >= chain.sl.stop) {
+                throw std::invalid_argument("coinjoin_txes contains a transaction at height " +
+                                            std::to_string(height) + " outside the clustered block range");
+            }
+            seeds.insert(tx);
+        }
+        return seeds;
     }
 
     /**
@@ -416,13 +440,15 @@ namespace blocksci {
     }
 
 
-    CoinjoinClusterManager CoinjoinClusterManager::createClustering(
-        BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-        const std::string &outputPath, bool overwrite, std::string coinjoinType, int maxHops) {
-        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
-
+    /**
+     * Collect addresses around `coinjoinTransactions`, link them with `clusteringFunc`
+     * and serialize the clusters into the already prepared `outputPath`.
+     */
+    CoinjoinClusterManager clusterAroundCoinjoins(
+        BlockRange &chain, const std::unordered_set<Transaction> &coinjoinTransactions,
+        const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
+        int maxHops) {
         auto &scripts = chain.getAccess().getScripts();
-        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, coinjoinType);
         auto collectedAddresses = collectAddressesWithinHops(coinjoinTransactions, maxHops);
 
         std::cout << "Collected " << collectedAddresses.size() << " addresses" << std::endl;
@@ -449,6 +475,29 @@ namespace blocksci {
 
         serializeCoinjoinClusterData(scripts, outputPath, clusterIDs, scriptStarts, remappedClusterCount);
         return {filesystem::path{outputPath}.str(), chain.getAccess()};
+    }
+
+    CoinjoinClusterManager CoinjoinClusterManager::createClustering(
+        BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
+        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
+        std::optional<uint64_t> minInputCount) {
+        heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
+
+        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
+
+        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
+        return clusterAroundCoinjoins(chain, coinjoinTransactions, clusteringFunc, outputPath, maxHops);
+    }
+
+    CoinjoinClusterManager CoinjoinClusterManager::createClusteringFromTransactions(
+        BlockRange &chain, const std::vector<Transaction> &coinjoinTransactions,
+        const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
+        bool overwrite, int maxHops) {
+        auto seeds = seedTransactionsInRange(chain, coinjoinTransactions);
+
+        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
+
+        return clusterAroundCoinjoins(chain, seeds, clusteringFunc, outputPath, maxHops);
     }
 
 }  // namespace blocksci

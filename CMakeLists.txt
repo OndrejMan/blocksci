@@ -7,6 +7,10 @@ set(BlockSci_VERSION 0.7.0)
 
 include(GNUInstallDirs)
 
+# Docker builds need portable CPU instructions, while local Release builds keep
+# the historical host-tuned defaults for performance.
+option(BLOCKSCI_PORTABLE_BUILD "Disable host-specific CPU optimizations" OFF)
+
 add_subdirectory(external)
 
 add_subdirectory(src)

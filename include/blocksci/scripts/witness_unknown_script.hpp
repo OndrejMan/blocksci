@@ -43,6 +43,7 @@ namespace blocksci {
         
         std::string getWitnessScriptString() const;
         uint8_t witnessVersion() const;
+        std::string addressString() const;
         
         std::string toString() const;
         std::string toPrettyString() const;

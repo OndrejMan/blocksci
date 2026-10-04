@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repository_root="$(cd "${script_dir}/../.." && pwd)"
+tag_script="${script_dir}/dependency-image-tag.sh"
+test_root="$(mktemp -d)"
+trap 'rm -rf "$test_root"' EXIT
+
+copy_inputs() {
+    cp "${repository_root}/Dockerfile" "$test_root/Dockerfile"
+    cp "${repository_root}/pyproject.toml" "$test_root/pyproject.toml"
+    cp "${repository_root}/uv.lock" "$test_root/uv.lock"
+    cp "${repository_root}/.dockerignore" "$test_root/.dockerignore"
+}
+
+compute_tag() {
+    bash "$tag_script" "$test_root" "$@"
+}
+
+assert_equal() {
+    if [ "$1" != "$2" ]; then
+        echo "Expected equal values, got '$1' and '$2'." >&2
+        exit 1
+    fi
+}
+
+assert_not_equal() {
+    if [ "$1" = "$2" ]; then
+        echo "Expected different values, got '$1'." >&2
+        exit 1
+    fi
+}
+
+platforms="linux/amd64,linux/arm64"
+copy_inputs
+baseline="$(compute_tag "$platforms" false 1)"
+
+printf '\n# simulated complete-stage change\n' >> "$test_root/Dockerfile"
+assert_equal "$baseline" "$(compute_tag "$platforms" false 1)"
+
+copy_inputs
+awk '{ print } /^FROM ubuntu:20.04 AS dependencies$/ { print "# simulated dependency-stage change" }' \
+    "$repository_root/Dockerfile" > "$test_root/Dockerfile"
+assert_not_equal "$baseline" "$(compute_tag "$platforms" false 1)"
+
+copy_inputs
+printf '\n# simulated lockfile change\n' >> "$test_root/uv.lock"
+assert_not_equal "$baseline" "$(compute_tag "$platforms" false 1)"
+
+copy_inputs
+assert_not_equal "$baseline" "$(compute_tag 'linux/amd64' false 1)"
+assert_equal "${baseline}-run-123-2" "$(compute_tag "$platforms" true 1 '123-2')"
+
+grep -vF 'FROM ${DEPS_IMAGE} AS complete' "$repository_root/Dockerfile" > "$test_root/Dockerfile"
+if compute_tag "$platforms" false 1 >/dev/null 2>&1; then
+    echo "Expected a missing stage boundary to fail." >&2
+    exit 1
+fi
+
+# The publishing workflow and pull-request validation derive this tag
+# independently and must agree on the key version, or a pull request stops
+# finding the image master published and silently rebuilds the toolchain on
+# every run. Nothing else enforces it, so assert it here -- this script runs in
+# pull-request validation.
+workflows="${repository_root}/.github/workflows"
+key_version_lines="$(grep -hoE '^[[:space:]]*DEPENDENCY_KEY_VERSION:[[:space:]]*"?[0-9]+"?' \
+    "${workflows}/docker-images.yaml" "${workflows}/validate-pull-request.yaml")"
+declared="$(printf '%s\n' "$key_version_lines" | grep -c .)"
+if [ "$declared" -ne 2 ]; then
+    echo "Expected both workflows to declare DEPENDENCY_KEY_VERSION; found $declared." >&2
+    exit 1
+fi
+distinct="$(printf '%s\n' "$key_version_lines" | grep -oE '[0-9]+' | sort -u | grep -c .)"
+if [ "$distinct" -ne 1 ]; then
+    echo "The workflows disagree on DEPENDENCY_KEY_VERSION:" >&2
+    printf '%s\n' "$key_version_lines" >&2
+    exit 1
+fi
+
+echo "dependency image tag tests passed"
