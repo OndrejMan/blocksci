@@ -124,3 +124,42 @@ def linked_coinjoin_data():
     path = os.path.join(self_dir, "../files/linked-coinjoin/btc/output.json")
     with open(path, "r") as f:
         return json.load(f)
+
+
+@pytest.fixture(scope="session")
+def repeated_change_chain(tmpdir_factory):
+    """A regtest chain whose JoinMarket-shaped rounds have repeated change.
+
+    The JoinMarket detector rejects these rounds, while subset matching finds them.
+    """
+    chain_dir = str(tmpdir_factory.mktemp("repeated_change"))
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    fixture_dir = os.path.join(self_dir, "../files/repeated-change/btc/regtest")
+    config_path = os.path.join(chain_dir, "config.json")
+
+    subprocess.run(
+        [
+            "blocksci_parser",
+            config_path,
+            "generate-config",
+            "bitcoin_regtest",
+            chain_dir,
+            "--disk",
+            fixture_dir,
+        ],
+        check=True,
+    )
+    subprocess.run(["blocksci_parser", config_path, "update"], check=True)
+
+    import blocksci
+    return blocksci.Blockchain(config_path)
+
+
+@pytest.fixture
+def repeated_change_data():
+    import json
+
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(self_dir, "../files/repeated-change/btc/output.json")
+    with open(path, "r") as f:
+        return json.load(f)

@@ -1,3 +1,5 @@
+from collections import Counter
+
 import pytest
 
 import blocksci
@@ -43,6 +45,129 @@ def test_coinjoin_clustering_rejects_unknown_type(linked_coinjoin_chain, tmpdir_
             str(tmpdir_factory.mktemp("unknown-coinjoin-clustering")),
             coinjoin_type="wasbai2",
         )
+
+
+def _cluster_from_txes(chain, tmpdir_factory, name, coinjoin_txes, stop=None):
+    return blocksci.cluster.CoinjoinClusterManager.create_clustering_from_txes(
+        chain,
+        0,
+        len(chain) if stop is None else stop,
+        coinjoin_txes,
+        blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+        str(tmpdir_factory.mktemp(name)),
+    )
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_from_txes_clusters_around_the_given_txes(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory
+):
+    coinjoin = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    address = coinjoin.inputs.to_list()[0].address
+
+    clustering = _cluster_from_txes(linked_coinjoin_chain, tmpdir_factory, "from-txes", [coinjoin])
+    assert clustering.cluster_with_address(address).address_count() > 0
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_from_txes_runs_no_detector(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory
+):
+    """An empty list is an empty clustering, even where the JoinMarket detector would find CoinJoins."""
+    coinjoin = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    assert coinjoin.is_joinmarket_coinjoin
+    address = coinjoin.inputs.to_list()[0].address
+
+    detected = blocksci.cluster.CoinjoinClusterManager.create_clustering(
+        linked_coinjoin_chain,
+        0,
+        len(linked_coinjoin_chain),
+        blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+        str(tmpdir_factory.mktemp("from-detector")),
+        coinjoin_type="joinmarket",
+    )
+    assert detected.cluster_with_address(address).address_count() > 0
+
+    empty = _cluster_from_txes(linked_coinjoin_chain, tmpdir_factory, "from-no-txes", [])
+    assert empty.cluster_with_address(address).address_count() == 0
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_from_txes_rejects_txes_outside_the_range(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory
+):
+    """A transaction outside [start, stop) would be collected but never clustered."""
+    coinjoin = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    with pytest.raises(ValueError, match="outside the clustered block range"):
+        _cluster_from_txes(
+            linked_coinjoin_chain, tmpdir_factory, "from-txes-outside", [coinjoin], stop=coinjoin.block_height
+        )
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_from_txes_rejects_other_chain_before_overwrite(
+    repeated_change_chain, linked_coinjoin_chain, linked_coinjoin_data, tmp_path
+):
+    foreign_tx = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    assert 0 <= foreign_tx.block_height < len(repeated_change_chain)
+    output = tmp_path / "clusters"
+    output.mkdir()
+    sentinel = output / "clusterOffsets.dat"
+    sentinel.write_bytes(b"existing clustering")
+
+    with pytest.raises(ValueError, match="different chain instance"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering_from_txes(
+            repeated_change_chain, 0, -1, [foreign_tx],
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(output), overwrite=True,
+        )
+    assert list(output.iterdir()) == [sentinel]
+    assert sentinel.read_bytes() == b"existing clustering"
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_from_txes_keeps_repeated_change_coinjoins(
+    repeated_change_chain, repeated_change_data, tmpdir_factory
+):
+    chain = repeated_change_chain
+    detected, skipped = chain.scan_coinjoins_by_subset_matching(
+        0, len(chain), "definite", 5000, 0.00004, 200000
+    )
+    seeds = list(detected)
+    assert {str(tx.hash) for tx in seeds} == {
+        repeated_change_data["repeated-change-first-tx"],
+        repeated_change_data["repeated-change-second-tx"],
+    }
+    assert not skipped
+    for tx in seeds:
+        counts = Counter(output.value for output in tx.outputs)
+        assert max(counts.values()) == 5
+        assert any(1 < count < 5 for count in counts.values())
+        assert not tx.is_joinmarket_coinjoin
+    assert not list(chain.filter_coinjoin_txes_raw(0, len(chain), "joinmarket"))
+
+    old = blocksci.cluster.CoinjoinClusterManager.create_clustering(
+        chain, 0, -1, blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+        str(tmpdir_factory.mktemp("repeated-change-old")), coinjoin_type="joinmarket",
+    )
+    new = _cluster_from_txes(chain, tmpdir_factory, "repeated-change-new", seeds)
+    for tx in seeds:
+        for io in tx.inputs.to_list() + tx.outputs.to_list():
+            assert old.cluster_with_address(io.address).address_count() == 0
+            assert new.cluster_with_address(io.address).address_count() > 0
+
+
+def test_coinjoin_clustering_from_txes_applies_consolidation(chain, json_data, tmpdir_factory):
+    consolidation = chain.tx_with_hash(json_data["merge-final-tx"])
+    assert len(consolidation.inputs) == 3
+    assert len(consolidation.outputs) == 1
+    # The supplied seed need not pass a detector: this isolates the shared heuristic path.
+    seed = consolidation.inputs.to_list()[0].spent_tx
+    clustering = _cluster_from_txes(chain, tmpdir_factory, "seed-consolidation", [seed])
+    addresses = [io.address for io in consolidation.inputs.to_list() + consolidation.outputs.to_list()]
+    clusters = [clustering.cluster_with_address(address) for address in addresses]
+    assert all(cluster.address_count() >= len(addresses) for cluster in clusters)
+    assert len({cluster.index for cluster in clusters}) == 1
 
 
 def test_clustering_default_heuristic(chain, tmpdir_factory):
