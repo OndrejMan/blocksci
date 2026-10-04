@@ -418,16 +418,15 @@ namespace blocksci {
     }
 
 
-    CoinjoinClusterManager CoinjoinClusterManager::createClustering(
-        BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
-        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
-        std::optional<uint64_t> minInputCount) {
-        heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
-
-        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
-
+    /**
+     * Collect addresses around `coinjoinTransactions`, link them with `clusteringFunc`
+     * and serialize the clusters into the already prepared `outputPath`.
+     */
+    CoinjoinClusterManager clusterAroundCoinjoins(
+        BlockRange &chain, const std::unordered_set<Transaction> &coinjoinTransactions,
+        const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
+        int maxHops) {
         auto &scripts = chain.getAccess().getScripts();
-        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
         auto collectedAddresses = collectAddressesWithinHops(coinjoinTransactions, maxHops);
 
         std::cout << "Collected " << collectedAddresses.size() << " addresses" << std::endl;
@@ -454,6 +453,18 @@ namespace blocksci {
 
         serializeCoinjoinClusterData(scripts, outputPath, clusterIDs, scriptStarts, remappedClusterCount);
         return {filesystem::path{outputPath}.str(), chain.getAccess()};
+    }
+
+    CoinjoinClusterManager CoinjoinClusterManager::createClustering(
+        BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
+        const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
+        std::optional<uint64_t> minInputCount) {
+        heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
+
+        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
+
+        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
+        return clusterAroundCoinjoins(chain, coinjoinTransactions, clusteringFunc, outputPath, maxHops);
     }
 
 }  // namespace blocksci
