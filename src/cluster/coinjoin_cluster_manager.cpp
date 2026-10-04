@@ -165,6 +165,28 @@ namespace blocksci {
     }
 
     /**
+     * Use CoinJoin transactions found by an earlier detection step as the clustering seed.
+     * A transaction outside `chain` would be collected but never processed by the heuristics,
+     * so it is rejected instead of silently producing a partial clustering.
+     */
+    std::unordered_set<Transaction> seedTransactionsInRange(BlockRange &chain,
+                                                            const std::vector<Transaction> &transactions) {
+        std::unordered_set<Transaction> seeds;
+        for (const auto &tx : transactions) {
+            if (&tx.getAccess() != &chain.getAccess()) {
+                throw std::invalid_argument("coinjoin_txes contains a transaction from a different chain instance");
+            }
+            auto height = tx.getBlockHeight();
+            if (height < chain.sl.start || height >= chain.sl.stop) {
+                throw std::invalid_argument("coinjoin_txes contains a transaction at height " +
+                                            std::to_string(height) + " outside the clustered block range");
+            }
+            seeds.insert(tx);
+        }
+        return seeds;
+    }
+
+    /**
      * Create clusters from a set of transactions and a heuristic.
      * Skips CoinJoin and Coinbase transactions.
      * 
@@ -465,6 +487,17 @@ namespace blocksci {
 
         auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
         return clusterAroundCoinjoins(chain, coinjoinTransactions, clusteringFunc, outputPath, maxHops);
+    }
+
+    CoinjoinClusterManager CoinjoinClusterManager::createClusteringFromTransactions(
+        BlockRange &chain, const std::vector<Transaction> &coinjoinTransactions,
+        const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
+        bool overwrite, int maxHops) {
+        auto seeds = seedTransactionsInRange(chain, coinjoinTransactions);
+
+        ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
+
+        return clusterAroundCoinjoins(chain, seeds, clusteringFunc, outputPath, maxHops);
     }
 
 }  // namespace blocksci
