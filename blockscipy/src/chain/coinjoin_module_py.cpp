@@ -4,6 +4,7 @@
 #include <blocksci/chain/access.hpp>
 #include <blocksci/chain/blockchain.hpp>
 #include <blocksci/chain/coinjoin_link_reduction.hpp>
+#include <blocksci/chain/coinjoin_mix_events.hpp>
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
@@ -52,6 +53,23 @@ void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) 
     if (!std::isfinite(percentageFee) || percentageFee < 0.0 || percentageFee > 1.0) {
         throw std::invalid_argument("percentage_fee must be finite and between 0 and 1");
     }
+}
+
+using MixEvents = std::unordered_map<std::string, std::vector<std::string>>;
+
+/** Liquidity event of every input and output of a CoinJoin, in index order, with coinjoins as the mix. */
+MixEvents classifyMixEvents(const Transaction &tx, const std::unordered_set<Transaction> &coinjoins) {
+    std::vector<std::string> inputs;
+    for (const auto &input : tx.inputs()) {
+        inputs.push_back(mixEventName(detail::classifyCoinjoinInput(coinjoins, input.getSpentTx())));
+    }
+    std::vector<std::string> outputs;
+    for (const auto &output : tx.outputs()) {
+        auto spendingTx = output.getSpendingTx();
+        auto spending = spendingTx ? std::optional<Transaction>{*spendingTx} : std::nullopt;
+        outputs.push_back(mixEventName(detail::classifyCoinjoinOutput(coinjoins, spending)));
+    }
+    return {{"inputs", std::move(inputs)}, {"outputs", std::move(outputs)}};
 }
 
 std::unordered_set<Transaction> findLinkedCjTxes(
@@ -393,6 +411,24 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("detector") = "definite",
             pybind11::arg("min_base_fee") = 5000, pybind11::arg("percentage_fee") = 0.00004,
             pybind11::arg("max_depth") = 200000)
+        .def(
+            "classify_coinjoin_mix_events",
+            [](Blockchain &, const std::vector<Transaction> &coinjoinTxes) {
+                std::unordered_set<Transaction> coinjoins(coinjoinTxes.begin(), coinjoinTxes.end());
+                std::unordered_map<Transaction, MixEvents> result;
+                py::gil_scoped_release release;
+                for (const auto &tx : coinjoins) {
+                    result.emplace(tx, classifyMixEvents(tx, coinjoins));
+                }
+                return result;
+            },
+            "Classify every input and output of the given CoinJoins as MIX_ENTER, MIX_REMIX, MIX_LEAVE or MIX_STAY "
+            "(the liquidity events of Svenda et al., PETS 2026, section 4.3.2). The given transactions are the mix: "
+            "an input spending one of them is a remix, any other input enters; an output spent by one of them is a "
+            "remix, one spent by another transaction leaves, an unspent one stays. Pass the result of a detection "
+            "step, e.g. the first result of scan_coinjoins_by_subset_matching. Returns a dict from each transaction "
+            "to {'inputs': [...], 'outputs': [...]}, both lists ordered by input or output index.",
+            pybind11::arg("coinjoin_txes"))
         .def(
             "find_hw_sw_coinjoins",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop) {
