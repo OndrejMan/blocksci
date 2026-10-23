@@ -57,6 +57,14 @@ Build the complete image when a self-contained image is needed:
 docker build --target complete -t blocksci-cj:latest .
 ```
 
+The build uses ccache to speed up rebuilds after source changes. Previously
+compiled files are reused when possible, so they don't have to be compiled
+again.
+
+The cache is stored by the Docker builder, not in the image. To clear it, run
+`docker builder prune`. In our tests with Docker 29, building with
+`docker build --no-cache` also started with an empty cache.
+
 Build the validation image only when intentionally running the test suites:
 
 ```bash
