@@ -62,7 +62,7 @@ namespace blocksci {
         /**
          * Create a clustering around CoinJoin transactions of given type.
          *
-         * First, find the CoinJoin transactions and collect addresses within 2 hops of them.
+         * First, find the CoinJoin transactions and collect the addresses of the transactions within maxHops of them.
          * Then, create clusters using the provided clustering heuristic function.
          * Finally, serialize the cluster data to the output directory.
          *
@@ -72,7 +72,9 @@ namespace blocksci {
          * @param coinjoinType Type of CoinJoin transactions to cluster (wasabi1, wasabi2, whirlpool,
          *        ashigaru, joinmarket). Required: there is no clustering without a seed type.
          * @param overwrite Overwrite existing cluster data
-         * @param maxHops Maximum number of hops to collect addresses around CoinJoin transactions
+         * @param maxHops How many rings of transactions contribute addresses: 1 is the CoinJoins
+         *        themselves, each further hop adds the transactions directly before and after the
+         *        previous ring, and 0 collects nothing, which yields an empty clustering
          * @param minInputCount Optional override of the Wasabi 2 minimum-input threshold.
          *        It is accepted only when coinjoinType is "wasabi2"; all other detectors
          *        always use their production criteria.
@@ -96,7 +98,9 @@ namespace blocksci {
          * @param clusteringFunc Clustering heuristic function
          * @param outputPath Path to output directory
          * @param overwrite Overwrite existing cluster data
-         * @param maxHops Maximum number of hops to collect addresses around CoinJoin transactions
+         * @param maxHops How many rings of transactions contribute addresses: 1 is the CoinJoins
+         *        themselves, each further hop adds the transactions directly before and after the
+         *        previous ring, and 0 collects nothing, which yields an empty clustering
          * @return CoinjoinClusterManager instance
          */
         static CoinjoinClusterManager createClusteringFromTransactions(
