@@ -21,7 +21,7 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
     libjsonrpccpp-dev libsnappy-dev zlib1g-dev libbz2-dev \
     liblz4-dev libzstd-dev libjemalloc-dev libsparsehash-dev python3-dev \
     python3-pip pkg-config git g++-7 gcc-7 ffmpeg libcairo2 libcairo2-dev curl jq \
-    libgirepository1.0-dev libdbus-1-dev libglib2.0-dev
+    libgirepository1.0-dev libdbus-1-dev libglib2.0-dev ccache
 
 # This image is only the reusable dependency/toolchain base; the BlockSci
 # sources are copied and compiled by the `complete` stage below.
@@ -52,7 +52,11 @@ ARG NTHREADS=1
 WORKDIR /mnt
 COPY . /mnt/blocksci
 
-RUN cd /mnt/blocksci/ && \
+# Cache compiler output between builds. The ccache wrappers intercept gcc-7/g++-7;
+# if ccache is missing from DEPS_IMAGE, the build runs without caching.
+RUN --mount=type=cache,id=blocksci-ccache,target=/root/.ccache \
+    cd /mnt/blocksci/ && \
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_MAXSIZE=10G && \
     ./build.sh --threads="${NTHREADS}" --portable-build --skip-jupyter
 
 CMD ["/bin/bash"]
@@ -61,6 +65,8 @@ FROM complete AS test
 
 ARG NTHREADS=1
 
-RUN cd /mnt/blocksci/ && \
+RUN --mount=type=cache,id=blocksci-ccache,target=/root/.ccache \
+    cd /mnt/blocksci/ && \
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_MAXSIZE=10G && \
     ./test-cpp.sh --threads="${NTHREADS}" && \
     ./test-python.sh
