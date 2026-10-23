@@ -117,7 +117,9 @@ ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount m
 
     // A transaction can be reached over a short branch before a longer branch into it has been walked, so the
     // outputs are only collected once every transaction is known. Transactions only spend outputs of transactions
-    // with a lower index, so in index order every predecessor is complete before its spenders read it.
+    // with a lower index, so in index order every predecessor is complete before its spenders read it. Each output
+    // keeps the length of the shortest path over which it reaches a transaction, and counts only within maxHops:
+    // a transaction at hop 2 can still receive an output whose own path to it is 3 spends long.
     std::vector<Transaction> reachedTxes;
     reachedTxes.reserve(hops.size());
     for (const auto &[reachedTx, hop] : hops) {
@@ -128,18 +130,30 @@ ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount m
     std::sort(reachedTxes.begin(), reachedTxes.end(),
               [](const Transaction &a, const Transaction &b) { return a.txNum < b.txNum; });
 
-    std::unordered_map<Transaction, std::unordered_set<Output>> seen;
+    // CoinJoin output -> length of the shortest spending path that brings it to the transaction
+    std::unordered_map<Transaction, std::unordered_map<Output, HopCount>> seen;
     for (const auto &reachedTx : reachedTxes) {
         auto &reached = seen[reachedTx];
+        auto addOutput = [&](const Output &output, HopCount pathLength) {
+            if (pathLength > maxHops) {
+                return;
+            }
+            auto [entry, inserted] = reached.emplace(output, pathLength);
+            if (!inserted && pathLength < entry->second) {
+                entry->second = pathLength;
+            }
+        };
         for (const auto &input : reachedTx.inputs()) {
             auto inputTx = input.getSpentTx();
             if (inputTx == coinjoin) {
-                reached.insert(input.getSpentOutput());
+                addOutput(input.getSpentOutput(), 1);
                 continue;
             }
             auto known = seen.find(inputTx);
             if (known != seen.end()) {
-                reached.insert(known->second.begin(), known->second.end());
+                for (const auto &[output, pathLength] : known->second) {
+                    addOutput(output, pathLength + 1);
+                }
             }
         }
     }
@@ -149,8 +163,10 @@ ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount m
         if (reachedTx == coinjoin) {
             continue;
         }
-        const auto &outputs = seen[reachedTx];
-        tree[hop][reachedTx] = std::vector<Output>(outputs.begin(), outputs.end());
+        auto &outputs = tree[hop][reachedTx];
+        for (const auto &[output, pathLength] : seen[reachedTx]) {
+            outputs.push_back(output);
+        }
     }
     return tree;
 }
@@ -592,7 +608,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
         .def("get_coinjoin_consolidation_tree", &get_coinjoin_consolidation_trees,
              "For every CoinJoin of the given type in [start, stop): the transactions reached by following its outputs "
              "through up to max_hops spending transactions, as {hop count: {transaction: [CoinJoin outputs flowing "
-             "into it]}}. A transaction reached over several paths is listed at its shortest hop count. The number "
+             "into it]}}. A transaction reached over several paths is listed at its shortest hop count, and an "
+             "output counts for it only if one of its own spending paths to it is at most max_hops long. The number "
              "of transactions reached grows quickly with max_hops on mainnet.",
              pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"), pybind11::arg("max_hops"))
         .def(
