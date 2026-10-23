@@ -89,11 +89,8 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          # `test` derives from the shipped `complete` stage and runs the suites
-          # for every target platform. Nothing is pushed, so running them inside
-          # the build is the only way to exercise them under QEMU -- and because
-          # `test` is a descendant, the compile still happens exactly once and
-          # the test artifacts stay out of what master publishes.
+          # `test` builds on `complete` and runs the suites inside the build, the
+          # only way to run them per platform under QEMU without pushing an image.
           target: test
           platforms: ${{ steps.platforms.outputs.platforms }}
           push: false
