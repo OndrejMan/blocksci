@@ -609,6 +609,16 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                         findLinkedCjTxes(start, stop, coinjoinType, chain, coinjoinSubType.value(), falseCoinjoins);
                 }
 
+                // Remix test used by the degradation below: a spend counts as a remix only when
+                // the spending transaction is one of the linked CoinJoins collected above. That
+                // set is narrower than "every CoinJoin", so these spends are not recognised as
+                // remixes and stay in the anonymity set:
+                //  - a CoinJoin linked only to CoinJoins of another type, because links are
+                //    matched per type (e.g. a Wasabi 2 output remixed into a JoinMarket round),
+                //  - a CoinJoin outside [start, stop), such as a remix confirmed after `stop`,
+                //  - a transaction listed in falseCoinjoins.
+                // Classifying spending transactions with the raw detectors would catch these,
+                // at the cost of the false positives that link reduction filters out.
                 auto isCollectedCoinjoin = [&](const Transaction &candidate) {
                     return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
                 };
