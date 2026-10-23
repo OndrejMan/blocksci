@@ -2,6 +2,9 @@
 # `dependencies` stage below; --build-arg DEPS_IMAGE=<prebuilt dependency image>
 # reuses an existing toolchain instead of rebuilding it.
 ARG DEPS_IMAGE=dependencies
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.1
+
+FROM ${UV_IMAGE} AS uv
 
 # Use Ubuntu 20.04 LTS as the base image
 FROM ubuntu:20.04 AS dependencies
@@ -24,8 +27,8 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
 # sources are copied and compiled by the `complete` stage below.
 WORKDIR /blocksci
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# uv comes from the UV_IMAGE pinned at the top of this file.
+COPY --from=uv /uv /uvx /bin/
 
 RUN uv python install 3.8.20
 RUN uv python pin 3.8.20
@@ -34,10 +37,10 @@ ENV VIRTUAL_ENV="/blocksci/.venv"
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install Python dependencies into the persistent venv without copying or
-# compiling the BlockSci source tree.
-COPY pip-all-requirements.txt /blocksci/pip-all-requirements.txt
-RUN CC=gcc-7 CXX=g++-7 uv pip install -r /blocksci/pip-all-requirements.txt
+# Install the locked Python environment without copying or compiling the
+# BlockSci source tree.
+COPY pyproject.toml uv.lock /blocksci/
+RUN uv sync --locked
 
 # Set the default command for the container
 CMD ["/bin/bash"]
