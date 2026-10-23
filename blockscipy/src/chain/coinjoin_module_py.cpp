@@ -7,12 +7,15 @@
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
+#include <algorithm>
 #include <cmath>
+#include <map>
 #include <optional>
 #include <queue>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "../external/json/single_include/nlohmann/json.hpp"
 #include "blocksci/chain/output.hpp"
@@ -78,107 +81,111 @@ std::unordered_set<Transaction> findLinkedCjTxes(
         txSet, [](const auto &tx) { return tx.inputs(); }, [](const auto &input) { return input.getSpentTx(); });
 }
 
-using LevelType = uint32_t;
-using ConsolidationTxCountType = std::unordered_set<Output>;
-using OneTxConsolidationType = std::unordered_map<Transaction, ConsolidationTxCountType>;
-using ConsolidationType = std::unordered_map<LevelType, OneTxConsolidationType>;
-using ConsolidationResultType = std::unordered_map<Transaction, ConsolidationType>;
+using HopCount = uint32_t;
+// Transactions reached from one CoinJoin, grouped by hop count, each with the CoinJoin outputs that flow into it.
+using ConsolidationTree = std::map<HopCount, std::unordered_map<Transaction, std::vector<Output>>>;
+using ConsolidationTreeResult = std::unordered_map<Transaction, ConsolidationTree>;
 
-ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int maxLevel, std::string coinjoinType) {
-    ConsolidationResultType result;
-    result[tx] = {};
-    auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
-    if (!detector(tx)) {
-        return result;
-    }
-
-    // we build the first level of the consolidation tree by transactions that directly
-    // spend the outputs of the coinjoin tx and possibly consolidate them.
-    // Then we build other levels by merging the sets of outputs of the transactions in the previous level.
-    std::unordered_map<Transaction, std::unordered_set<Output>> seen;
-    std::unordered_set<Transaction> bfsProcessed;
-    std::queue<std::pair<Transaction, int>> bfsQueue;
-    std::unordered_map<int, std::unordered_set<Transaction>> txesByLevel;
-    bfsQueue.push({tx, 0});
-    bfsProcessed.insert(tx);
-    seen[tx] = {};
+// Follows the outputs of `coinjoin` through up to `maxHops` spending transactions and records which of its
+// outputs flow into every transaction reached. A transaction reached over several paths is listed once, at its
+// shortest hop count.
+ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount maxHops) {
+    std::unordered_map<Transaction, HopCount> hops;
+    std::queue<Transaction> bfsQueue;
+    hops[coinjoin] = 0;
+    bfsQueue.push(coinjoin);
 
     while (!bfsQueue.empty()) {
-        auto [currentTx, level] = bfsQueue.front();
+        auto currentTx = bfsQueue.front();
         bfsQueue.pop();
+        const auto nextHop = hops[currentTx] + 1;
+        if (nextHop > maxHops) {
+            continue;
+        }
         for (const auto &output : currentTx.outputs()) {
-            if (!output.isSpent()) continue;
+            if (!output.isSpent()) {
+                continue;
+            }
             auto spendingTx = output.getSpendingTx().value();
-            const auto nextLevel = level + 1;
-            if (nextLevel > maxLevel) {
+            if (hops.find(spendingTx) != hops.end()) {
                 continue;
             }
-            if (bfsProcessed.find(spendingTx) != bfsProcessed.end()) {
+            hops[spendingTx] = nextHop;
+            bfsQueue.push(spendingTx);
+        }
+    }
+
+    // A transaction can be reached over a short branch before a longer branch into it has been walked, so the
+    // outputs are only collected once every transaction is known. Transactions only spend outputs of transactions
+    // with a lower index, so in index order every predecessor is complete before its spenders read it. Each output
+    // keeps the length of the shortest path over which it reaches a transaction, and counts only within maxHops:
+    // a transaction at hop 2 can still receive an output whose own path to it is 3 spends long.
+    std::vector<Transaction> reachedTxes;
+    reachedTxes.reserve(hops.size());
+    for (const auto &[reachedTx, hop] : hops) {
+        if (reachedTx != coinjoin) {
+            reachedTxes.push_back(reachedTx);
+        }
+    }
+    std::sort(reachedTxes.begin(), reachedTxes.end(),
+              [](const Transaction &a, const Transaction &b) { return a.txNum < b.txNum; });
+
+    // CoinJoin output -> length of the shortest spending path that brings it to the transaction
+    std::unordered_map<Transaction, std::unordered_map<Output, HopCount>> seen;
+    for (const auto &reachedTx : reachedTxes) {
+        auto &reached = seen[reachedTx];
+        auto addOutput = [&](const Output &output, HopCount pathLength) {
+            if (pathLength > maxHops) {
+                return;
+            }
+            auto [entry, inserted] = reached.emplace(output, pathLength);
+            if (!inserted && pathLength < entry->second) {
+                entry->second = pathLength;
+            }
+        };
+        for (const auto &input : reachedTx.inputs()) {
+            auto inputTx = input.getSpentTx();
+            if (inputTx == coinjoin) {
+                addOutput(input.getSpentOutput(), 1);
                 continue;
             }
-            bfsProcessed.insert(spendingTx);
-            bfsQueue.push({spendingTx, nextLevel});
-            if (seen.find(spendingTx) == seen.end()) {
-                seen[spendingTx] = {};
-            }
-            if (txesByLevel.find(level) == txesByLevel.end()) {
-                txesByLevel[level] = {};
-            }
-            txesByLevel[level].insert(spendingTx);
-
-            for (const auto &input : spendingTx.inputs()) {
-                auto inputTx = input.getSpentTx();
-                // if the input tx is the base tx (coinjoin tx), then we add the output directly to this tx's result
-                if (inputTx == tx) {
-                    seen[spendingTx].insert(input.getSpentOutput());
-                    continue;
-                }
-
-                // as we go by levels (bfs), if we haven't seen the input tx, then it's out of the scope
-                if (seen.find(inputTx) == seen.end()) {
-                    continue;
-                }
-
-                // otherwise we say this tx from this level consolidates all outputs of the previous level
-                for (const auto &foundOutput : seen[inputTx]) {
-                    seen[spendingTx].insert(foundOutput);
+            auto known = seen.find(inputTx);
+            if (known != seen.end()) {
+                for (const auto &[output, pathLength] : known->second) {
+                    addOutput(output, pathLength + 1);
                 }
             }
         }
     }
-    for (const auto &[level, txes] : txesByLevel) {
-        for (const auto &processedTx : txes) {
-            if (result[tx].find(level) == result[tx].end()) {
-                result[tx][level] = {};
-            }
-            if (result[tx][level].find(processedTx) == result[tx][level].end()) {
-                result[tx][level][processedTx] = {};
-            }
-            result[tx][level][processedTx] = seen[processedTx];
+
+    ConsolidationTree tree;
+    for (const auto &[reachedTx, hop] : hops) {
+        if (reachedTx == coinjoin) {
+            continue;
+        }
+        auto &outputs = tree[hop][reachedTx];
+        for (const auto &[output, pathLength] : seen[reachedTx]) {
+            outputs.push_back(output);
         }
     }
-
-    return result;
+    return tree;
 }
 
-ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeight start, BlockHeight stop,
-                                                    std::string coinjoinType, int maxLevel) {
-    blocksci::heuristics::validateCoinjoinParameters(coinjoinType);
-    ConsolidationResultType result;
-
-    using MapType = ConsolidationResultType;
-    auto reduceFunc = [](MapType &our, MapType &their) -> MapType & {
-        for (const auto &[tx, consolidations] : their) {
-            our[tx] = consolidations;
-        }
+ConsolidationTreeResult get_coinjoin_consolidation_trees(Blockchain &chain, BlockHeight start, BlockHeight stop,
+                                                         const std::string &coinjoinType, HopCount maxHops) {
+    const auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
+    auto reduceFunc = [](ConsolidationTreeResult &our, ConsolidationTreeResult &their) -> ConsolidationTreeResult & {
+        our.insert(std::make_move_iterator(their.begin()), std::make_move_iterator(their.end()));
         return our;
     };
-
-    auto mapFunc = [&](const Transaction &tx) -> MapType {
-        return get_consolidations_for_tx(tx, maxLevel, coinjoinType);
+    auto mapFunc = [&](const Transaction &tx) -> ConsolidationTreeResult {
+        if (!detector(tx)) {
+            return {};
+        }
+        return {{tx, get_consolidation_tree(tx, maxHops)}};
     };
-
-    return chain[{start, stop}].mapReduce<MapType, decltype(mapFunc), decltype(reduceFunc)>(mapFunc, reduceFunc);
+    return chain[{start, stop}].mapReduce<ConsolidationTreeResult, decltype(mapFunc), decltype(reduceFunc)>(
+        mapFunc, reduceFunc);
 }
 
 void init_coinjoin_module(py::class_<Blockchain> &cl) {
@@ -598,6 +605,13 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             },
             "Filter certain consolidation transactions", pybind11::arg("start"), pybind11::arg("stop"),
             pybind11::arg("input_output_ratio"), pybind11::arg("coinjoin_type"), pybind11::arg("hops"))
+        .def("get_coinjoin_consolidation_tree", &get_coinjoin_consolidation_trees,
+             "For every CoinJoin of the given type in [start, stop): the transactions reached by following its outputs "
+             "through up to max_hops spending transactions, as {hop count: {transaction: [CoinJoin outputs flowing "
+             "into it]}}. A transaction reached over several paths is listed at its shortest hop count, and an "
+             "output counts for it only if one of its own spending paths to it is at most max_hops long. The number "
+             "of transactions reached grows quickly with max_hops on mainnet.",
+             pybind11::arg("start"), pybind11::arg("stop"), pybind11::arg("coinjoin_type"), pybind11::arg("max_hops"))
         .def(
             "compute_anonymity_degradation",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, int daysToConsider, std::string coinjoinType,
