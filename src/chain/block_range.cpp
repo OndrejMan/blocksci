@@ -12,10 +12,15 @@
 #include <range/v3/view/filter.hpp>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace blocksci {
     
     std::vector<BlockRange> BlockRange::segment(unsigned int segmentCount) const {
+        if (segmentCount == 0) {
+            throw std::invalid_argument("BlockRange::segment requires at least one segment");
+        }
+
         std::vector<BlockRange> segments;
         
         if (size() < static_cast<BlockHeight>(segmentCount)) {
@@ -27,14 +32,19 @@ namespace blocksci {
         auto firstTx = firstTxIndex();
         auto totalTxCount = lastTx - firstTx;
         uint32_t segmentSize = totalTxCount / segmentCount;
-        
-        
+
         auto it = begin();
         auto chainEnd = end();
         while(lastTx - (*it).firstTxIndex() > segmentSize) {
             auto endIt = std::lower_bound(it, chainEnd, (*it).firstTxIndex() + segmentSize, [](const Block &block, uint32_t txNum) {
                 return block.firstTxIndex() < txNum;
             });
+            // No block starts at or after the requested transaction index. Dereferencing
+            // chainEnd here would be undefined behavior and would leave the loop unable
+            // to advance, so stop and let the trailing segment cover the remainder.
+            if (endIt == chainEnd) {
+                break;
+            }
             auto startBlock = *it;
             auto endBlock = *endIt;
             segments.emplace_back(Slice{startBlock.height(), endBlock.height()}, access);
