@@ -1,9 +1,6 @@
-# Where the compiled stage takes its toolchain from. The default names the
-# `dependencies` stage below, so a plain build compiles everything from this one
-# file. CI passes an input-derived dependency cache tag instead
-# (--build-arg DEPS_IMAGE=ghcr.io/ondrejman/blocksci-cj:deps-<hash>), which drops
-# the dependencies stage out of the build graph entirely -- nothing is rebuilt or
-# downloaded while that cached toolchain image is available.
+# Where the `complete` stage takes its toolchain from. By default it is the
+# `dependencies` stage below; --build-arg DEPS_IMAGE=<prebuilt dependency image>
+# reuses an existing toolchain instead of rebuilding it.
 ARG DEPS_IMAGE=dependencies
 
 # Use Ubuntu 20.04 LTS as the base image
@@ -15,7 +12,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && apt-get update
 
-# Install system dependencies
 RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
     libboost-iostreams-dev libboost-serialization-dev libboost-thread-dev \
     libboost-test-dev libssl-dev libjsoncpp-dev libcurl4-openssl-dev \
@@ -28,15 +24,12 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
 # sources are copied and compiled by the `complete` stage below.
 WORKDIR /blocksci
 
-# Install uv and add it to PATH
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# Install and pin Python 3.8.20
 RUN uv python install 3.8.20
 RUN uv python pin 3.8.20
 
-# Create the virtual environment ONCE and activate it globally for all subsequent RUN steps
 ENV VIRTUAL_ENV="/blocksci/.venv"
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -49,11 +42,9 @@ RUN CC=gcc-7 CXX=g++-7 uv pip install -r /blocksci/pip-all-requirements.txt
 # Set the default command for the container
 CMD ["/bin/bash"]
 
-# The image that ships. Tests are deliberately off: the suites are run against
-# this exact image afterwards (`--target test` below, or TEST_ONLY=1 in a
-# container), so test binaries and parsed test chains never end up in a
-# published layer. Building them in adds ~2.5GB, which breaks the Apptainer SIF
-# conversion the PBS analyzers depend on.
+# The image that ships. Tests are deliberately off: the suites run against this
+# exact image afterwards (`--target test` below, or TEST_ONLY=1 in a container),
+# so test binaries and parsed test chains (~2.5GB) stay out of the published image.
 FROM ${DEPS_IMAGE} AS complete
 
 ARG NTHREADS=1
@@ -69,9 +60,8 @@ RUN cd /mnt/blocksci/ && \
 
 CMD ["/bin/bash"]
 
-# Validation only -- never pushed. It reuses the compiled layers of `complete`,
-# so the sources are compiled once no matter which target is built. Pull-request
-# validation builds this target for every platform.
+# Validation only, never pushed. It reuses the compiled layers of `complete`,
+# so the sources are compiled once no matter which target is built.
 FROM complete AS test
 
 RUN cd /mnt/blocksci/ && \
