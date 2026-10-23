@@ -164,6 +164,12 @@ namespace blocksci {
         return chain.mapReduce<std::unordered_set<Transaction>>(mapFunc, reduceFunc);
     }
 
+    void requireNonNegativeMaxHops(int maxHops) {
+        if (maxHops < 0) {
+            throw std::invalid_argument("max_distance must not be negative");
+        }
+    }
+
     /**
      * Use CoinJoin transactions found by an earlier detection step as the clustering seed.
      * A transaction outside `chain` would be collected but never processed by the heuristics,
@@ -243,7 +249,8 @@ namespace blocksci {
      * This method also assigns a global index to the addresses.
      * 
      * @param startTransactions The set of transactions to start from
-     * @param maxHops The maximum number of hops to collect addresses from
+     * @param maxHops How many rings of transactions to collect: 1 is `startTransactions` themselves, each further
+     *        hop adds the transactions directly before and after the previous ring, and 0 collects nothing
      * 
      * @return A map of addresses to their global index
      */
@@ -482,6 +489,7 @@ namespace blocksci {
         const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
         std::optional<uint64_t> minInputCount) {
         heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
+        requireNonNegativeMaxHops(maxHops);
 
         ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
 
@@ -494,6 +502,7 @@ namespace blocksci {
         const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
         bool overwrite, int maxHops) {
         auto seeds = seedTransactionsInRange(chain, coinjoinTransactions);
+        requireNonNegativeMaxHops(maxHops);
 
         ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
 
