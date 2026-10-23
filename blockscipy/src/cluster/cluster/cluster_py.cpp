@@ -133,7 +133,7 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "The max_distance parameter is how many rings of transactions around the CoinJoins contribute "
             "addresses: 1 collects the input and output addresses of the CoinJoin transactions themselves, 2 also "
             "those of the transactions directly before and after them, and so on; 0 collects nothing and yields an "
-            "empty clustering. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
+            "empty clustering, and a negative value raises ValueError. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
             "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
             "criteria.")
         .def_static(
