@@ -27,7 +27,7 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
 # sources are copied and compiled by the `complete` stage below.
 WORKDIR /blocksci
 
-# Install uv. Update the release tag here when a newer version is needed.
+# uv comes from the UV_IMAGE pinned at the top of this file.
 COPY --from=uv /uv /uvx /bin/
 
 RUN uv python install 3.8.20
