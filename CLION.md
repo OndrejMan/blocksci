@@ -59,8 +59,8 @@ docker build --target complete -t blocksci-cj:latest .
 
 Rebuilds after a source change reuse compiler output from a BuildKit cache
 mount (ccache), so only the changed sources compile again. The cache lives in
-the builder, not in the image; `docker builder prune` clears it, and
-`docker build --no-cache` starts from an empty one.
+the builder, not in the image; `docker builder prune` clears it. With Docker 29,
+`docker build --no-cache` was also observed to start from an empty cache.
 
 Build the validation image only when intentionally running the test suites:
 
