@@ -1196,7 +1196,7 @@ namespace blocksci {
             }
 
             auto total_output_value =
-                std::accumulate(tx.outputs().begin(), tx.outputs().end(), 0,
+                std::accumulate(tx.outputs().begin(), tx.outputs().end(), int64_t{0},
                                 [](int64_t sum, const Output &output) { return sum + output.getValue(); });
 
             // Check if there is one huge output that has the majority of the output value, while the rest are small,
@@ -1278,8 +1278,8 @@ namespace blocksci {
         CoinJoinType getCoinjoinTag(const Transaction &tx) {
             if (blocksci::heuristics::isWasabi2CoinJoin(tx)) {
                 // 850237 is July 1st 2024
-                return tx.block().height() < 850237 ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
-                                                    : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
+                return tx.getBlockHeight() < 850237 ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
+                                                   : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
             } else if (blocksci::heuristics::isWhirlpoolCoinJoin(tx)) {
                 return blocksci::heuristics::CoinJoinType::Whirlpool;
             } else if (blocksci::heuristics::isAshigaruCoinJoin(tx)) {
