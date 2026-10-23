@@ -1125,7 +1125,7 @@ namespace blocksci {
             }
 
             // Each mix output belongs to one participant, who must contribute
-            // at least one input. Allow up to five inputs per participant.
+            // at least one input. Allow at most five inputs per mix output on average.
             if (numIns < participantCount || numIns > 5 * participantCount) {
                 return false;
             }
@@ -1158,16 +1158,8 @@ namespace blocksci {
             }
 
             // ---------------------------------------------------------
-            // 5. Input/output uniqueness sanity
+            // 5. Output uniqueness sanity
             // ---------------------------------------------------------
-            std::unordered_set<Address> uniqueInputs;
-            for (const auto &i : inputs) {
-                uniqueInputs.insert(i.getAddress());
-            }
-            if (uniqueInputs.size() < participantCount) {
-                return false;
-            }
-
             std::unordered_set<Address> uniqueOutputs;
             for (const auto &o : outputs) {
                 uniqueOutputs.insert(o.getAddress());

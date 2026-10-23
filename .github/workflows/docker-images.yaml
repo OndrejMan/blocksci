@@ -198,9 +198,8 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           provenance: false
-          # Scoped by the input-derived tag, never the run-scoped one: a rebuilt
-          # toolchain would otherwise write to a scope unique to its run, which
-          # nothing -- not the next push, not any pull request -- ever reads.
+          # Scoped by the input-derived tag, not the run-scoped one, so later runs
+          # and pull requests can read this cache.
           cache-from: type=gha,scope=complete-${{ needs.dependencies.outputs.dependency_base_tag }}
           cache-to: type=gha,mode=max,scope=complete-${{ needs.dependencies.outputs.dependency_base_tag }}
           build-args: |
@@ -309,11 +308,8 @@ jobs:
           DEPENDENCY_BASE_TAG: ${{ needs.dependencies.outputs.dependency_base_tag }}
         run: |
           set -euo pipefail
-          # The toolchain was built in this run and published under a run-scoped
-          # tag, so until now the input-derived tag still resolved to the last
-          # toolchain that passed its suites. They have passed, so move the
-          # input-derived tag onto this one. A run whose suites fail never becomes
-          # what later pushes and pull requests pin.
+          # The toolchain built in this run passed its suites, so move the
+          # input-derived tag onto it; until now it named the last passing one.
           docker buildx imagetools create \
             --tag "${BASE_IMAGE}:${DEPENDENCY_BASE_TAG}" \
             "${BASE_IMAGE}:${DEPENDENCY_TAG}"

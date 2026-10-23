@@ -5,9 +5,7 @@
 
 #include "unit_test.h"
 
-#include <algorithm>
 #include <stdexcept>
-#include <vector>
 
 namespace blocksci {
 
@@ -46,38 +44,6 @@ TEST_F(BlockRangeTest, SegmentCoversWholeChain) {
 
 TEST_F(BlockRangeTest, SegmentRejectsZeroCount) {
     EXPECT_THROW(chain.segment(0), std::invalid_argument);
-}
-
-namespace {
-
-struct SyntheticBlock {
-    uint32_t firstTransaction;
-
-    uint32_t firstTxIndex() const {
-        return firstTransaction;
-    }
-};
-
-}  // namespace
-
-// Regression input for the end-iterator guard in BlockRange::segment(). The target
-// transaction lies inside the final block, so no block begins at or after it. The
-// production code must detect this result and let the final segment cover the remainder.
-TEST(BlockRangeSegmentBoundaryTest, DenseTrailingBlockReturnsChainEnd) {
-    const std::vector<SyntheticBlock> blocks = {{0}, {10}, {11}, {12}};
-    constexpr uint32_t lastTx = 112;
-    constexpr unsigned int segmentCount = 4;
-    const uint32_t segmentSize = lastTx / segmentCount;
-
-    ASSERT_GT(lastTx - blocks.front().firstTxIndex(), segmentSize);
-
-    const auto endIt = std::lower_bound(
-        blocks.begin(), blocks.end(), blocks.front().firstTxIndex() + segmentSize,
-        [](const SyntheticBlock &block, uint32_t txNum) {
-            return block.firstTxIndex() < txNum;
-        });
-
-    EXPECT_EQ(endIt, blocks.end());
 }
 
 }  // namespace blocksci

@@ -33,8 +33,7 @@ dependency_hash="$(
     {
         printf 'dependency-key-version\0%s\0' "$key_version"
         printf 'Dockerfile:dependencies\0'
-        # Exact-line match rather than a regex: the boundary now contains ${...},
-        # which no regex dialect should have to interpret.
+        # Exact-line match: the boundary contains ${...}, which a regex would have to escape.
         awk -v boundary="$stage_boundary" '$0 == boundary { exit } { print }' "$dockerfile"
         printf '\0pyproject.toml\0'
         cat "$pyproject"

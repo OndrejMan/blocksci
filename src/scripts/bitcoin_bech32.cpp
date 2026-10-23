@@ -163,9 +163,4 @@ std::tuple<std::string, bech32_data, Encoding> decodeWithEncoding(const std::str
     return std::make_tuple(std::string(), bech32_data(), Encoding::INVALID);
 }
 
-std::pair<std::string, bech32_data> decode(const std::string& str) {
-    auto decoded = decodeWithEncoding(str);
-    return std::make_pair(std::get<0>(decoded), std::get<1>(decoded));
-}
-
 } // namespace bech32

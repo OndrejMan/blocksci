@@ -16,8 +16,6 @@ namespace {
     }
 }  // namespace
 
-// The 2 * 3^n series validates each candidate denomination before inserting
-// it, so only values within the configured range are retained.
 TEST(WasabiDenominationsTest, ThreePowerDoubleSeriesStopsAtMaximum) {
     const auto &denominations = blocksci::CoinjoinUtils::ww2_denominations;
 
@@ -36,8 +34,6 @@ TEST(WasabiDenominationsTest, TenPowerDoubleSeriesStopsAtMaximum) {
         << "2 * 10^n overshoots the maximum";
 }
 
-// The 1-2-5 series generates the 5 * 10^n denominations by validating each
-// multiplied candidate before inserting it.
 TEST(WasabiDenominationsTest, TenPowerQuintupleSeriesIsGeneratedWithinRange) {
     const auto &denominations = blocksci::CoinjoinUtils::ww2_denominations;
 

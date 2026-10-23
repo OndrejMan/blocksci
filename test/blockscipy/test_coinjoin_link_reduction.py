@@ -81,8 +81,7 @@ def test_anonymity_degradation_does_not_count_joinmarket_remix_as_consolidation(
     degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
 
     # The second JoinMarket CoinJoin spends five outputs of the first one. It
-    # is a remix, not a consolidation that degrades the remaining anonymity
-    # set. Before the dynamic CoinJoin set, it was incorrectly counted here.
+    # is a remix, not a consolidation that degrades the remaining anonymity set.
     assert degradation_by_txid[first_txid]["total_count"] == 5
 
 
