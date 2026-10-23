@@ -130,9 +130,9 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "- 'whirlpool': Whirlpool CoinJoin\n"
             "- 'ashigaru': Ashigaru CoinJoin\n"
             "- 'joinmarket': JoinMarket CoinJoin\n\n"
-            "The max_distance parameter specifies the maximum distance from a coinjoin transaction to collect "
-            "addresses, where 0 means only the coinjoin transaction itself, 1 means the coinjoin transaction and its "
-            "direct neighbors, etc. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
+            "The max_distance parameter controls address collection: 0 collects nothing, 1 collects only the "
+            "CoinJoin's input and output addresses, and 2 adds its direct neighbors. "
+            "The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
             "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
             "criteria.")
         .def_static(
