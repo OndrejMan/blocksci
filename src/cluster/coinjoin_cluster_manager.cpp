@@ -243,7 +243,8 @@ namespace blocksci {
      * This method also assigns a global index to the addresses.
      * 
      * @param startTransactions The set of transactions to start from
-     * @param maxHops The maximum number of hops to collect addresses from
+     * @param maxHops How many rings of transactions to collect: 1 is `startTransactions` themselves, each further
+     *        hop adds the transactions directly before and after the previous ring, and 0 collects nothing
      * 
      * @return A map of addresses to their global index
      */

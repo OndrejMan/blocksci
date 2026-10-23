@@ -446,3 +446,30 @@ def test_tagged_address(chain, tmpdir_factory):
     assert cluster.tagged_addresses(tags).size == 1
     assert cluster.tagged_addresses(tags).to_list()[0].address == address
     assert cluster.tagged_addresses(tags).to_list()[0].tag == "test-tag"
+
+
+@pytest.mark.btc
+@pytest.mark.parametrize(
+    "max_distance, collects_coinjoin, collects_funding",
+    [(0, False, False), (1, True, False), (2, True, True)],
+)
+def test_coinjoin_clustering_max_distance_counts_transaction_rings(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory, max_distance, collects_coinjoin, collects_funding
+):
+    """max_distance 1 is the CoinJoin's own addresses and 2 adds the transactions next to it; 0 is empty."""
+    coinjoin = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    coinjoin_input = coinjoin.inputs.to_list()[0]
+    funding_address = coinjoin_input.spent_tx.inputs.to_list()[0].address
+
+    clustering = blocksci.cluster.CoinjoinClusterManager.create_clustering_from_txes(
+        linked_coinjoin_chain,
+        0,
+        len(linked_coinjoin_chain),
+        [coinjoin],
+        blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+        str(tmpdir_factory.mktemp("max-distance-{}".format(max_distance))),
+        max_distance=max_distance,
+    )
+
+    assert (clustering.cluster_with_address(coinjoin_input.address).address_count() > 0) is collects_coinjoin
+    assert (clustering.cluster_with_address(funding_address).address_count() > 0) is collects_funding
