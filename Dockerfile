@@ -21,7 +21,7 @@ RUN apt-get install -y cmake libtool autoconf libboost-filesystem-dev \
     libjsonrpccpp-dev libsnappy-dev zlib1g-dev libbz2-dev \
     liblz4-dev libzstd-dev libjemalloc-dev libsparsehash-dev python3-dev \
     python3-pip pkg-config git g++-7 gcc-7 ffmpeg libcairo2 libcairo2-dev curl jq \
-    libgirepository1.0-dev libdbus-1-dev libglib2.0-dev
+    libgirepository1.0-dev libdbus-1-dev libglib2.0-dev ccache
 
 # This image is only the reusable dependency/toolchain base; the BlockSci
 # sources are copied and compiled by the `complete` stage below.
@@ -58,7 +58,12 @@ ARG RUN_PYTHON_TESTS=0
 WORKDIR /mnt
 COPY . /mnt/blocksci
 
-RUN cd /mnt/blocksci/ && \
+# Every source change invalidates the COPY above, so ccache keeps compiler output in
+# a cache mount between builds. Its /usr/lib/ccache wrappers shadow the gcc-7/g++-7
+# that build.sh calls; a DEPS_IMAGE without ccache simply compiles uncached.
+RUN --mount=type=cache,id=blocksci-ccache,target=/root/.ccache \
+    cd /mnt/blocksci/ && \
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_MAXSIZE=10G && \
     BLOCKSCI_PORTABLE_BUILD=ON SKIP_JUPYTER=1 RUN_CPP_TESTS=${RUN_CPP_TESTS} RUN_PYTHON_TESTS=${RUN_PYTHON_TESTS} ./build.sh
 
 CMD ["/bin/bash"]
@@ -67,5 +72,7 @@ CMD ["/bin/bash"]
 # so the sources are compiled once no matter which target is built.
 FROM complete AS test
 
-RUN cd /mnt/blocksci/ && \
+RUN --mount=type=cache,id=blocksci-ccache,target=/root/.ccache \
+    cd /mnt/blocksci/ && \
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_MAXSIZE=10G && \
     TEST_ONLY=1 RUN_CPP_TESTS=1 RUN_PYTHON_TESTS=1 ./build.sh
