@@ -8,6 +8,7 @@
 #include <blocksci/cluster/cluster.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <blocksci/scripts/script_range.hpp>
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <optional>
@@ -107,7 +108,6 @@ using ConsolidationTreeResult = std::unordered_map<Transaction, ConsolidationTre
 // shortest hop count.
 ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount maxHops) {
     std::unordered_map<Transaction, HopCount> hops;
-    std::unordered_map<Transaction, std::unordered_set<Output>> seen;
     std::queue<Transaction> bfsQueue;
     hops[coinjoin] = 0;
     bfsQueue.push(coinjoin);
@@ -129,18 +129,34 @@ ConsolidationTree get_consolidation_tree(const Transaction &coinjoin, HopCount m
             }
             hops[spendingTx] = nextHop;
             bfsQueue.push(spendingTx);
+        }
+    }
 
-            auto &reached = seen[spendingTx];
-            for (const auto &input : spendingTx.inputs()) {
-                auto inputTx = input.getSpentTx();
-                if (inputTx == coinjoin) {
-                    reached.insert(input.getSpentOutput());
-                    continue;
-                }
-                auto known = seen.find(inputTx);
-                if (known != seen.end()) {
-                    reached.insert(known->second.begin(), known->second.end());
-                }
+    // A transaction can be reached over a short branch before a longer branch into it has been walked, so the
+    // outputs are only collected once every transaction is known. Transactions only spend outputs of transactions
+    // with a lower index, so in index order every predecessor is complete before its spenders read it.
+    std::vector<Transaction> reachedTxes;
+    reachedTxes.reserve(hops.size());
+    for (const auto &[reachedTx, hop] : hops) {
+        if (reachedTx != coinjoin) {
+            reachedTxes.push_back(reachedTx);
+        }
+    }
+    std::sort(reachedTxes.begin(), reachedTxes.end(),
+              [](const Transaction &a, const Transaction &b) { return a.txNum < b.txNum; });
+
+    std::unordered_map<Transaction, std::unordered_set<Output>> seen;
+    for (const auto &reachedTx : reachedTxes) {
+        auto &reached = seen[reachedTx];
+        for (const auto &input : reachedTx.inputs()) {
+            auto inputTx = input.getSpentTx();
+            if (inputTx == coinjoin) {
+                reached.insert(input.getSpentOutput());
+                continue;
+            }
+            auto known = seen.find(inputTx);
+            if (known != seen.end()) {
+                reached.insert(known->second.begin(), known->second.end());
             }
         }
     }
