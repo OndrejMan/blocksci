@@ -12,6 +12,7 @@
 
 #include <blocksci/chain/chain_fwd.hpp>
 #include <blocksci/scripts/scripts_fwd.hpp>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -94,11 +95,47 @@ namespace blocksci {
          */
         bool BLOCKSCI_EXPORT isAshigaruCoinJoin(const Transaction &tx);
         /**
+         * Validate parameters shared by CoinJoin filtering and clustering APIs.
+         *
+         * Only wasabi1, wasabi2, whirlpool, ashigaru, and joinmarket are
+         * valid detector types. minInputCount is a Wasabi 2-specific threshold
+         * and cannot be used with another CoinJoin type. Subtypes are only
+         * supported by Whirlpool (50m, 5m, 1m, 100k) and Ashigaru (25m, 2.5m).
+         */
+        void BLOCKSCI_EXPORT validateCoinjoinParameters(const std::string &type,
+                                                        std::optional<uint64_t> minInputCount = std::nullopt,
+                                                        std::optional<std::string> subtype = std::nullopt);
+
+        /**
+         * A validated CoinJoin detector that can be reused while scanning a
+         * range of transactions. Construct it once outside the scan loop to
+         * avoid repeatedly validating string parameters and selecting a
+         * detector for every transaction.
+         */
+        class BLOCKSCI_EXPORT CoinjoinDetector {
+        public:
+            CoinjoinDetector(const std::string &type, std::optional<std::string> subtype = std::nullopt,
+                             std::optional<uint64_t> minInputCount = std::nullopt);
+
+            bool operator()(const Transaction &tx) const;
+
+        private:
+            using Predicate = bool (*)(const Transaction &, const std::optional<uint64_t> &,
+                                       const std::optional<int64_t> &);
+
+            Predicate predicate;
+            std::optional<uint64_t> minInputCount;
+            std::optional<int64_t> subtypeDenomination;
+        };
+
+        /**
          * Given a string "wasabi2", "wasabi1", or "whirlpool", return whether
          * the transaction is the coinjoin of the given type.
          *
          * @param tx The transaction to check
          * @param type The type of coinjoin to check for (wasabi1, wasabi2, whirlpool, ashigaru)
+         * @param subtype Optional denomination subtype. Ashigaru supports "25m" (0.25 BTC) and
+         *                "2.5m" (0.025 BTC).
          *
          * @return true if the transaction is a coinjoin of the given type, false otherwise
          */

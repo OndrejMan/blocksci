@@ -47,7 +47,6 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
         len(linked_coinjoin_chain),
         0,
         "joinmarket",
-        coinjoinSubType="linked-regression",
         falseCoinjoins={first_txid},
     )
     assert txids(linked_without_false_positive) == set()
@@ -114,3 +113,26 @@ def test_linked_coinjoin_filter_rejects_negative_min_input_count(linked_coinjoin
             "wasabi2",
             min_input_count=-1,
         )
+
+
+@pytest.mark.btc
+@pytest.mark.parametrize("method_name", ["filter_coinjoin_txes", "filter_coinjoin_txes_raw"])
+def test_coinjoin_filters_reject_min_input_count_for_non_wasabi2(linked_coinjoin_chain, method_name):
+    filter_coinjoins = getattr(linked_coinjoin_chain, method_name)
+
+    with pytest.raises(ValueError, match="min_input_count is only supported for coinjoin_type 'wasabi2'"):
+        filter_coinjoins(
+            0,
+            len(linked_coinjoin_chain),
+            "joinmarket",
+            min_input_count=5,
+        )
+
+
+@pytest.mark.btc
+@pytest.mark.parametrize("method_name", ["filter_coinjoin_txes", "filter_coinjoin_txes_raw"])
+def test_coinjoin_filters_reject_unknown_type(linked_coinjoin_chain, method_name):
+    filter_coinjoins = getattr(linked_coinjoin_chain, method_name)
+
+    with pytest.raises(ValueError, match="unknown coinjoin_type 'wasbai2'"):
+        filter_coinjoins(0, len(linked_coinjoin_chain), "wasbai2")

@@ -142,12 +142,12 @@ namespace blocksci {
     }
 
     std::unordered_set<Transaction> identifyCoinjoinTransactions(
-        BlockRange &chain, const std::string &coinjoinType, std::optional<uint64_t> minInputCount) {
+        BlockRange &chain, const heuristics::CoinjoinDetector &detector) {
         auto mapFunc = [&](const BlockRange &blocks) {
             std::unordered_set<Transaction> localCoinjoinTransactions;
             for (const auto &block : blocks) {
                 for (const auto &tx : block) {
-                    if (heuristics::isCoinjoinOfGivenType(tx, coinjoinType, std::nullopt, minInputCount)) {
+                    if (detector(tx)) {
                         localCoinjoinTransactions.insert(tx);
                     }
                 }
@@ -422,14 +422,12 @@ namespace blocksci {
         BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
         const std::string &outputPath, const std::string &coinjoinType, bool overwrite, int maxHops,
         std::optional<uint64_t> minInputCount) {
-        if (minInputCount.has_value() && coinjoinType != "wasabi2") {
-            throw std::invalid_argument("min_input_count is only supported for coinjoin_type 'wasabi2'");
-        }
+        heuristics::CoinjoinDetector detector(coinjoinType, std::nullopt, minInputCount);
 
         ClusterManager::prepareClusterDataLocation(outputPath, overwrite);
 
         auto &scripts = chain.getAccess().getScripts();
-        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, coinjoinType, minInputCount);
+        auto coinjoinTransactions = identifyCoinjoinTransactions(chain, detector);
         auto collectedAddresses = collectAddressesWithinHops(coinjoinTransactions, maxHops);
 
         std::cout << "Collected " << collectedAddresses.size() << " addresses" << std::endl;
