@@ -131,7 +131,7 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "- 'ashigaru': Ashigaru CoinJoin\n"
             "- 'joinmarket': JoinMarket CoinJoin\n\n"
             "The max_distance parameter controls address collection: 0 collects nothing, 1 collects only the "
-            "CoinJoin's input and output addresses, and 2 adds its direct neighbors. "
+            "CoinJoin's input and output addresses, and 2 adds its direct neighbors. Negative values raise ValueError. "
             "The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
             "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
             "criteria.")
