@@ -163,3 +163,43 @@ def repeated_change_data():
     path = os.path.join(self_dir, "../files/repeated-change/btc/output.json")
     with open(path, "r") as f:
         return json.load(f)
+
+
+@pytest.fixture(scope="session")
+def converging_consolidation_chain(tmpdir_factory):
+    """A regtest chain where CoinJoin -> A -> S and CoinJoin -> B -> C -> S.
+
+    The CoinJoin is recognised by the JoinMarket detector, and S consolidates
+    outputs that reach it over branches of different length.
+    """
+    chain_dir = str(tmpdir_factory.mktemp("converging_consolidation"))
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    fixture_dir = os.path.join(self_dir, "../files/converging-consolidation/btc/regtest")
+    config_path = os.path.join(chain_dir, "config.json")
+
+    subprocess.run(
+        [
+            "blocksci_parser",
+            config_path,
+            "generate-config",
+            "bitcoin_regtest",
+            chain_dir,
+            "--disk",
+            fixture_dir,
+        ],
+        check=True,
+    )
+    subprocess.run(["blocksci_parser", config_path, "update"], check=True)
+
+    import blocksci
+    return blocksci.Blockchain(config_path)
+
+
+@pytest.fixture
+def converging_consolidation_data():
+    import json
+
+    self_dir = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(self_dir, "../files/converging-consolidation/btc/output.json")
+    with open(path, "r") as f:
+        return json.load(f)
