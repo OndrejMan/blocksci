@@ -473,3 +473,23 @@ def test_coinjoin_clustering_max_distance_counts_transaction_rings(
 
     assert (clustering.cluster_with_address(coinjoin_input.address).address_count() > 0) is collects_coinjoin
     assert (clustering.cluster_with_address(funding_address).address_count() > 0) is collects_funding
+
+
+@pytest.mark.btc
+def test_coinjoin_clustering_rejects_negative_max_distance(
+    linked_coinjoin_chain, linked_coinjoin_data, tmpdir_factory
+):
+    coinjoin = linked_coinjoin_chain.tx_with_hash(linked_coinjoin_data["linked-joinmarket-first-tx"])
+    output = tmpdir_factory.mktemp("negative-max-distance")
+
+    with pytest.raises(ValueError, match="max_distance must not be negative"):
+        blocksci.cluster.CoinjoinClusterManager.create_clustering_from_txes(
+            linked_coinjoin_chain,
+            0,
+            len(linked_coinjoin_chain),
+            [coinjoin],
+            blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
+            str(output),
+            max_distance=-1,
+        )
+    assert list(output.listdir()) == []
