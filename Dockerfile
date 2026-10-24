@@ -51,6 +51,9 @@ ARG NTHREADS=1
 
 WORKDIR /mnt
 COPY . /mnt/blocksci
+# A prebuilt DEPS_IMAGE can carry an older environment; build.sh syncs this
+# current lock before installing the Python bindings and starting notebooks.
+COPY pyproject.toml uv.lock /blocksci/
 
 # Every source change invalidates the COPY above, so ccache keeps compiler output in
 # a cache mount between builds. Its /usr/lib/ccache wrappers shadow the gcc-7/g++-7
