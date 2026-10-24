@@ -40,16 +40,6 @@ cd /mnt/blocksci
 
 uv sync --project /blocksci --locked || exit 1
 
-# The Jupyter stack is pinned in uv.lock and therefore already installed above.
-# Only the nbextension assets need a separate configuration
-# step, and it is best effort: jupyter-contrib-nbextensions targets Notebook 6.x
-# and may not apply to the pinned Notebook 7.x.
-if [ "$SKIP_JUPYTER" != "1" ]; then
-    uv run --project /blocksci --locked jupyter contrib nbextension install --user || \
-        echo "warning: nbextension setup failed; notebooks will run without extensions"
-fi
-
-
 BLOCKSCIPY_COMPILE_DB="$(mktemp)" || exit 1
 trap 'rm -f "$BLOCKSCIPY_COMPILE_DB"' EXIT
 
