@@ -22,6 +22,7 @@
 #include <cmath>
 #include <future>
 #include <iostream>
+#include <stdexcept>
 
 #ifdef BLOCKSCI_FILE_PARSER
 
@@ -108,6 +109,9 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
     if (!blockList.empty()) {
         fileNum = newestBlock.nFile;
         filePos = newestBlock.nDataPos + newestBlock.size;
+        if (!config.pathForBlockFile(fileNum).exists()) {
+            throw std::runtime_error("Parser resume block file is missing; restore it before updating");
+        }
     }
 
     auto firstFile = fileNum;
@@ -115,6 +119,7 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
     auto maxFileNum = maxBlockFileNum(fileNum, config);
     
     auto localConfig = config;
+    bool hasResumeBlock = !blockList.empty();
     
     std::mutex m;
     
@@ -141,11 +146,16 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
                 }
                 auto blocks = readBlocksImpl(reader, fileNum, localConfig.diskConfig);
                 
-                if (fileNum == maxFileNum && blocks.size() > 0) {
-                    newestBlock = blocks.back();
-                }
                 activeThreads--;
                 std::lock_guard<std::mutex> lock(m);
+
+                // Core may already have preallocated an empty next file. The
+                // cursor belongs to the last actual block, not that empty tail.
+                if (!blocks.empty() && (!hasResumeBlock || fileNum > newestBlock.nFile ||
+                    (fileNum == newestBlock.nFile && blocks.back().nDataPos > newestBlock.nDataPos))) {
+                    newestBlock = blocks.back();
+                    hasResumeBlock = true;
+                }
                 
                 for (auto &block : blocks) {
                     blockList[block.hash] = block;
