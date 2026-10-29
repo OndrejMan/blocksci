@@ -37,10 +37,6 @@ namespace blocksci {
         CScriptView getWitnessScript() const;
         ranges::optional<ranges::any_view<ranges::any_view<unsigned char>>> getWitnessStack() const;
 
-        const WitnessUnknownScriptData *getDataForMe() const {
-            return getData();
-        }
-        
         std::string getWitnessScriptString() const;
         uint8_t witnessVersion() const;
         std::string addressString() const;
