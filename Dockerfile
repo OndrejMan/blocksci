@@ -45,14 +45,12 @@ CMD ["/bin/bash"]
 FROM ${DEPS_IMAGE} AS complete
 
 ARG NTHREADS=1
-ARG RUN_CPP_TESTS=0
-ARG RUN_PYTHON_TESTS=0
 
 WORKDIR /mnt
 COPY . /mnt/blocksci
 
 RUN cd /mnt/blocksci/ && \
-    RUN_CPP_TESTS=${RUN_CPP_TESTS} RUN_PYTHON_TESTS=${RUN_PYTHON_TESTS} ./build.sh --threads="${NTHREADS}" --portable-build --skip-jupyter
+    ./build.sh --threads="${NTHREADS}" --portable-build --skip-jupyter
 
 CMD ["/bin/bash"]
 
@@ -61,4 +59,5 @@ FROM complete AS test
 ARG NTHREADS=1
 
 RUN cd /mnt/blocksci/ && \
-    TEST_ONLY=1 RUN_CPP_TESTS=1 RUN_PYTHON_TESTS=1 ./build.sh --threads="${NTHREADS}"
+    ./test-cpp.sh --threads="${NTHREADS}" && \
+    ./test-python.sh
