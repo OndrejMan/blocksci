@@ -9,8 +9,6 @@
 #include <blocksci/chain/coinjoin_link_reduction.hpp>
 
 #include <iostream>
-#include <string>
-#include <unordered_map>
 #include <unordered_set>
 
 namespace blocksci {
@@ -471,24 +469,25 @@ TEST_F(AlgorithmsTest, TotalFees) {
     ASSERT_EQ(amount, algo_amount);
 }
 
-TEST(CoinjoinLinkReductionTest, RetainsEveryParentOfAMultiParentCoinjoin) {
-    // Regression fixture: A and B are CoinJoins and C directly spends one
-    // output from each. The linked set must contain all three endpoints.
-    const std::unordered_set<std::string> candidates = {"A", "B", "C"};
-    const std::unordered_map<std::string, std::vector<std::string>> inputs = {
-        {"A", {}},
-        {"B", {}},
-        {"C", {"A", "B"}},
-    };
+TEST_F(AlgorithmsTest, LinkedCoinjoinsRetainEveryParentOfAMultiParentTransaction) {
+    // Regression fixture: the transaction spends outputs of two or more
+    // candidates, so the linked set must contain it and every parent.
+    for(auto block : chain) {
+        for(auto tx : block) {
+            std::unordered_set<Transaction> candidates;
+            for(auto input : tx.inputs()) {
+                candidates.insert(input.getSpentTx());
+            }
+            if(candidates.size() < 2) {
+                continue;
+            }
+            candidates.insert(tx);
 
-    const auto linked = detail::findLinkedCoinjoinTransactions(
-        candidates,
-        [&inputs](const std::string &transaction) -> const std::vector<std::string> & {
-            return inputs.at(transaction);
-        },
-        [](const std::string &spentTransaction) { return spentTransaction; });
-
-    EXPECT_EQ(linked, candidates);
+            EXPECT_EQ(detail::findLinkedCoinjoinTransactions(candidates), candidates);
+            return;
+        }
+    }
+    FAIL() << "The test chain has no transaction spending outputs of two transactions";
 }
 
 }  // namespace blocksci

@@ -58,8 +58,7 @@ std::unordered_set<Transaction> findLinkedCjTxes(
         txSet.insert(tx);
     }
 
-    return detail::findLinkedCoinjoinTransactions(
-        txSet, [](const auto &tx) { return tx.inputs(); }, [](const auto &input) { return input.getSpentTx(); });
+    return detail::findLinkedCoinjoinTransactions(txSet);
 }
 
 using LevelType = uint32_t;

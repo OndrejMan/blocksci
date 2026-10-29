@@ -1,6 +1,9 @@
 #ifndef BLOCKSCI_COINJOIN_LINK_REDUCTION_HPP
 #define BLOCKSCI_COINJOIN_LINK_REDUCTION_HPP
 
+#include <blocksci/chain/input.hpp>
+#include <blocksci/chain/transaction.hpp>
+
 #include <unordered_set>
 
 namespace blocksci {
@@ -13,14 +16,12 @@ namespace blocksci {
          * A transaction may spend outputs from more than one candidate parent;
          * inspect every input so that all direct links are retained.
          */
-        template <typename Transaction, typename InputsForTransaction, typename SpentTransactionForInput>
-        std::unordered_set<Transaction> findLinkedCoinjoinTransactions(
-            const std::unordered_set<Transaction> &candidates, InputsForTransaction inputsForTransaction,
-            SpentTransactionForInput spentTransactionForInput) {
+        inline std::unordered_set<Transaction> findLinkedCoinjoinTransactions(
+            const std::unordered_set<Transaction> &candidates) {
             std::unordered_set<Transaction> result;
             for (const auto &transaction : candidates) {
-                for (const auto &input : inputsForTransaction(transaction)) {
-                    const auto spentTransaction = spentTransactionForInput(input);
+                for (const auto &input : transaction.inputs()) {
+                    const auto spentTransaction = input.getSpentTx();
                     if (candidates.find(spentTransaction) != candidates.end()) {
                         result.insert(transaction);
                         result.insert(spentTransaction);
