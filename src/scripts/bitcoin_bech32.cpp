@@ -79,16 +79,30 @@ bech32_data expand_hrp(const std::string& hrp) {
     return ret;
 }
 
+/** Value polymod leaves for a valid Bech32 checksum (BIP 173). */
+const uint32_t bech32_checksum_constant = 1;
+
+/** Value polymod leaves for a valid Bech32m checksum (BIP 350). */
+const uint32_t bech32m_checksum_constant = 0x2bc830a3;
+
 /** Verify a checksum. */
-bool verify_checksum(const std::string& hrp, const bech32_data& values) {
-    return polymod(cat(expand_hrp(hrp), values)) == 1;
+bech32::Encoding verify_checksum(const std::string& hrp, const bech32_data& values) {
+    const uint32_t check = polymod(cat(expand_hrp(hrp), values));
+    if (check == bech32_checksum_constant) {
+        return bech32::Encoding::BECH32;
+    }
+    if (check == bech32m_checksum_constant) {
+        return bech32::Encoding::BECH32M;
+    }
+    return bech32::Encoding::INVALID;
 }
 
 /** Create a checksum. */
-bech32_data create_checksum(const std::string& hrp, const bech32_data& values) {
+bech32_data create_checksum(const std::string& hrp, const bech32_data& values, bech32::Encoding encoding) {
     bech32_data enc = cat(expand_hrp(hrp), values);
     enc.resize(enc.size() + 6);
-    uint32_t mod = polymod(enc) ^ 1;
+    const uint32_t constant = encoding == bech32::Encoding::BECH32M ? bech32m_checksum_constant : bech32_checksum_constant;
+    uint32_t mod = polymod(enc) ^ constant;
     bech32_data ret;
     ret.resize(6);
     for (size_t i = 0; i < 6; ++i) {
@@ -102,8 +116,16 @@ bech32_data create_checksum(const std::string& hrp, const bech32_data& values) {
 namespace bech32 {
 
 /** Encode a Bech32 string. */
-std::string encode(const std::string& hrp, const bech32_data& values) {
-    bech32_data checksum = create_checksum(hrp, values);
+std::string encode(const std::string& hrp, const bech32_data& values, Encoding encoding) {
+    if (encoding == Encoding::INVALID) {
+        return "";
+    }
+    for (const auto value : values) {
+        if (value > 31) {
+            return "";
+        }
+    }
+    bech32_data checksum = create_checksum(hrp, values, encoding);
     bech32_data combined = cat(values, checksum);
     std::string ret = hrp + '1';
     ret.reserve(ret.size() + combined.size());
@@ -114,7 +136,7 @@ std::string encode(const std::string& hrp, const bech32_data& values) {
 }
 
 /** Decode a Bech32 string. */
-std::pair<std::string, bech32_data> decode(const std::string& str) {
+std::tuple<std::string, bech32_data, Encoding> decodeWithEncoding(const std::string& str) {
     bool lower = false, upper = false;
     bool ok = true;
     for (size_t i = 0; ok && i < str.size(); ++i) {
@@ -138,12 +160,13 @@ std::pair<std::string, bech32_data> decode(const std::string& str) {
             for (size_t i = 0; i < pos; ++i) {
                 hrp += lc(str[i]);
             }
-            if (verify_checksum(hrp, values)) {
-                return std::make_pair(hrp, bech32_data(values.begin(), values.end() - 6));
+            const Encoding encoding = verify_checksum(hrp, values);
+            if (encoding != Encoding::INVALID) {
+                return std::make_tuple(hrp, bech32_data(values.begin(), values.end() - 6), encoding);
             }
         }
     }
-    return std::make_pair(std::string(), bech32_data());
+    return std::make_tuple(std::string(), bech32_data(), Encoding::INVALID);
 }
 
 } // namespace bech32
