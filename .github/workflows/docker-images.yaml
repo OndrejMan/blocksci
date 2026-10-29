@@ -205,8 +205,6 @@ jobs:
           build-args: |
             NTHREADS=${{ vars.BLOCKSCI_NTHREADS || '1' }}
             DEPS_IMAGE=${{ needs.dependencies.outputs.base_image }}:${{ needs.dependencies.outputs.dependency_tag }}
-            RUN_CPP_TESTS=0
-            RUN_PYTHON_TESTS=0
 
   cpp_tests:
     name: Run C++ tests (${{ matrix.platform }})
@@ -237,8 +235,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --platform "${{ matrix.platform }}" \
-            -e TEST_ONLY=1 -e RUN_CPP_TESTS=1 -e RUN_PYTHON_TESTS=0 \
-            "$CANDIDATE_IMAGE" /mnt/blocksci/build.sh --threads="$NTHREADS"
+            "$CANDIDATE_IMAGE" /mnt/blocksci/test-cpp.sh --threads="$NTHREADS"
 
   python_tests:
     name: Run Python tests (${{ matrix.platform }})
@@ -265,12 +262,10 @@ jobs:
         shell: bash
         env:
           CANDIDATE_IMAGE: ${{ needs.build_candidate.outputs.candidate_image }}
-          NTHREADS: ${{ vars.BLOCKSCI_NTHREADS || '1' }}
         run: |
           set -euo pipefail
           docker run --rm --platform "${{ matrix.platform }}" \
-            -e TEST_ONLY=1 -e RUN_CPP_TESTS=0 -e RUN_PYTHON_TESTS=1 \
-            "$CANDIDATE_IMAGE" /mnt/blocksci/build.sh --threads="$NTHREADS"
+            "$CANDIDATE_IMAGE" /mnt/blocksci/test-python.sh
 
   publish_complete:
     name: Publish verified complete image
