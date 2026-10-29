@@ -6,7 +6,10 @@
 //
 
 #include "unit_test.h"
+#include <blocksci/chain/coinjoin_link_reduction.hpp>
+
 #include <iostream>
+#include <unordered_set>
 
 namespace blocksci {
 
@@ -466,5 +469,25 @@ TEST_F(AlgorithmsTest, TotalFees) {
     ASSERT_EQ(amount, algo_amount);
 }
 
-}  // namespace blocksci
+TEST_F(AlgorithmsTest, LinkedCoinjoinsRetainEveryParentOfAMultiParentTransaction) {
+    // Regression fixture: the transaction spends outputs of two or more
+    // candidates, so the linked set must contain it and every parent.
+    for(auto block : chain) {
+        for(auto tx : block) {
+            std::unordered_set<Transaction> candidates;
+            for(auto input : tx.inputs()) {
+                candidates.insert(input.getSpentTx());
+            }
+            if(candidates.size() < 2) {
+                continue;
+            }
+            candidates.insert(tx);
 
+            EXPECT_EQ(detail::findLinkedCoinjoinTransactions(candidates), candidates);
+            return;
+        }
+    }
+    FAIL() << "The test chain has no transaction spending outputs of two transactions";
+}
+
+}  // namespace blocksci
