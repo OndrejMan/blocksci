@@ -54,6 +54,58 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
 
 
 @pytest.mark.btc
+def test_anonymity_degradation_ignores_joinmarket_remixes(
+    linked_coinjoin_chain, linked_coinjoin_data
+):
+    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
+
+    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
+        0, len(linked_coinjoin_chain), 0, "joinmarket", ignoreRemixes=True
+    )
+    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
+
+    # Five equal outputs of the first CoinJoin are spent by the second
+    # JoinMarket CoinJoin. The remaining five are not remixed.
+    assert degradation_by_txid[first_txid]["total_count"] == 5
+    assert degradation_by_txid[first_txid]["not_remixed_outputs"] == 5
+
+
+@pytest.mark.btc
+def test_anonymity_degradation_does_not_count_joinmarket_remix_as_consolidation(
+    linked_coinjoin_chain, linked_coinjoin_data
+):
+    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
+
+    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
+        0, len(linked_coinjoin_chain), 1, "joinmarket", ignoreRemixes=True
+    )
+    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
+
+    # The second JoinMarket CoinJoin spends five outputs of the first one. It
+    # is a remix, not a consolidation that degrades the remaining anonymity set.
+    assert degradation_by_txid[first_txid]["total_count"] == 5
+
+
+@pytest.mark.btc
+def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_chain):
+    linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
+    first_coinjoin_height = min(tx.block.height for tx in linked)
+
+    # The first fixture CoinJoin is linked only by the second one, in the next
+    # block. A single-block range therefore has a heuristic match but no
+    # in-range CoinJoin-to-CoinJoin link to reduce to.
+    raw = linked_coinjoin_chain.filter_coinjoin_txes_raw(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
+    )
+    reduced = linked_coinjoin_chain.filter_coinjoin_txes(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
+    )
+
+    assert len(raw) == 1
+    assert not reduced
+
+
+@pytest.mark.btc
 def test_linked_coinjoin_filter_rejects_negative_min_input_count(linked_coinjoin_chain):
     with pytest.raises(ValueError, match="min_input_count must be non-negative"):
         linked_coinjoin_chain.filter_coinjoin_txes(
