@@ -30,9 +30,7 @@ def test_regtest_config_disables_coinjoin_height_thresholds(linked_coinjoin_chai
 
 
 @pytest.mark.btc
-def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
-    linked_coinjoin_chain, linked_coinjoin_data
-):
+def test_linked_coinjoin_filter_returns_both_endpoints(linked_coinjoin_chain, linked_coinjoin_data):
     first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
     second_txid = linked_coinjoin_data["linked-joinmarket-second-tx"]
 
@@ -42,48 +40,11 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
     assert len(linked) == 2
     assert txids(linked) == {first_txid, second_txid}
 
-    linked_without_false_positive = linked_coinjoin_chain.compute_anonymity_degradation(
-        0,
-        len(linked_coinjoin_chain),
-        0,
-        "joinmarket",
-        coinjoinSubType="linked-regression",
-        falseCoinjoins={first_txid},
-    )
-    assert txids(linked_without_false_positive) == set()
-
 
 @pytest.mark.btc
-def test_anonymity_degradation_ignores_joinmarket_remixes(
-    linked_coinjoin_chain, linked_coinjoin_data
-):
-    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
-
-    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
-        0, len(linked_coinjoin_chain), 0, "joinmarket", ignoreRemixes=True
-    )
-    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
-
-    # Five equal outputs of the first CoinJoin are spent by the second
-    # JoinMarket CoinJoin. The remaining five are not remixed.
-    assert degradation_by_txid[first_txid]["total_count"] == 5
-    assert degradation_by_txid[first_txid]["not_remixed_outputs"] == 5
-
-
-@pytest.mark.btc
-def test_anonymity_degradation_does_not_count_joinmarket_remix_as_consolidation(
-    linked_coinjoin_chain, linked_coinjoin_data
-):
-    first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
-
-    degradation = linked_coinjoin_chain.compute_anonymity_degradation(
-        0, len(linked_coinjoin_chain), 1, "joinmarket", ignoreRemixes=True
-    )
-    degradation_by_txid = {str(transaction.hash): stats for transaction, stats in degradation.items()}
-
-    # The second JoinMarket CoinJoin spends five outputs of the first one. It
-    # is a remix, not a consolidation that degrades the remaining anonymity set.
-    assert degradation_by_txid[first_txid]["total_count"] == 5
+def test_anonymity_degradation_rejects_joinmarket(linked_coinjoin_chain):
+    with pytest.raises(ValueError, match="does not support coinjoin_type 'joinmarket'"):
+        linked_coinjoin_chain.compute_anonymity_degradation(0, len(linked_coinjoin_chain), 0, "joinmarket")
 
 
 @pytest.mark.btc

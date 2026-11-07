@@ -608,9 +608,15 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::string> coinjoinSubType, bool ignoreNonStandardDenominations, bool ignoreRemixes,
                std::optional<std::tuple<int64_t, int64_t>> ww2DenomsBucket,
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
+                // The CoinJoin sets below keep only CoinJoins linked to another one of the same type. JoinMarket
+                // CoinJoins need not spend one another, so a linked set would silently miss standalone rounds.
+                if (coinjoinType == "joinmarket") {
+                    throw std::invalid_argument("compute_anonymity_degradation does not support coinjoin_type "
+                                                "'joinmarket'");
+                }
                 std::unordered_map<std::string, std::unordered_set<Transaction>> cjsOfGivenType;
                 std::unordered_set<Transaction> allCollectedCoinjoins;
-                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru", "joinmarket"}) {
+                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru"}) {
                     // Find links only between CoinJoins of the same type.
                     auto coinjoins = findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
                     allCollectedCoinjoins.insert(coinjoins.begin(), coinjoins.end());
@@ -622,8 +628,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 }
 
                 // A spend counts as a remix only when the spending transaction is one of the CoinJoins
-                // collected above: within [start, stop), not in falseCoinjoins and linked to another
-                // CoinJoin of its type. Spends into any other round stay in the anonymity set.
+                // collected above: not JoinMarket, within [start, stop), not in falseCoinjoins and linked
+                // to another CoinJoin of its type. Spends into any other round stay in the anonymity set.
                 auto isCollectedCoinjoin = [&](const Transaction &candidate) {
                     return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
                 };
@@ -846,7 +852,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
 
                 return result;
             },
-            "Compute anonymity degradation in coinjoins. Ignore remixes by default", pybind11::arg("start"),
+            "Compute anonymity degradation in coinjoins. Ignore remixes by default. JoinMarket is not supported.",
+            pybind11::arg("start"),
             pybind11::arg("stop"), pybind11::arg("daysToConsider"), pybind11::arg("coinjoinType"),
             pybind11::arg("coinjoinSubType") = py::none(), pybind11::arg("ignoreNonStandardDenominations") = false,
             pybind11::arg("ignoreRemixes") = true, pybind11::arg("ww2DenomsBucket") = py::none(),
