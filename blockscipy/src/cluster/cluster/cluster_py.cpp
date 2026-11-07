@@ -108,28 +108,33 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "create_clustering",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop,
                blocksci::coinjoin_heuristics::ClusteringHeuristic heuristicFunc, const std::string &outputPath,
-               bool overwrite, std::string coinjoinType, int maxDistance) {
+               const std::string &coinjoinType, bool overwrite, int maxDistance,
+               std::optional<uint64_t> minInputCount) {
                 py::scoped_ostream_redirect stream(std::cout, py::module::import("sys").attr("stdout"));
 
                 if (stop == -1) {
                     stop = chain.size();
                 }
                 auto range = chain[{start, stop}];
-                return CoinjoinClusterManager::createClustering(range, heuristicFunc, outputPath, overwrite,
-                                                                coinjoinType, maxDistance);
+                return CoinjoinClusterManager::createClustering(range, heuristicFunc, outputPath, coinjoinType,
+                                                                overwrite, maxDistance, minInputCount);
             },
             py::arg("chain"), py::arg("start"), py::arg("stop"), py::arg("heuristic_func"), py::arg("output_path"),
-            py::arg("overwrite") = false, py::arg("coinjoin_type") = "None", py::arg("max_distance") = 2,
+            py::arg("coinjoin_type"), py::arg("overwrite") = false, py::arg("max_distance") = 2,
+            py::arg("min_input_count") = std::nullopt,
             "Creates a clustering of the blockchain using the given heuristic and saves it to the given output path.\n"
+            "A coinjoin_type is required; the clustering is always seeded on CoinJoin transactions.\n"
             "Possible coinjoin types are:\n"
-            "- 'none': No coinjoin type is used\n"
             "- 'wasabi2': Wasabi CoinJoin type 2\n"
             "- 'wasabi1': Wasabi CoinJoin type 1\n"
             "- 'whirlpool': Whirlpool CoinJoin\n"
-            "- 'ashigaru': Ashigaru CoinJoin\n\n"
+            "- 'ashigaru': Ashigaru CoinJoin\n"
+            "- 'joinmarket': JoinMarket CoinJoin\n\n"
             "The max_distance parameter specifies the maximum distance from a coinjoin transaction to collect "
             "addresses, where 0 means only the coinjoin transaction itself, 1 means the coinjoin transaction and its "
-            "direct neighbors, etc.");
+            "direct neighbors, etc. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
+            "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
+            "criteria.");
 }
 
 void init_cluster(py::class_<Cluster> &cl) {
