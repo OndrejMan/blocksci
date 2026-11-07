@@ -26,14 +26,27 @@ def test_address_from_index_round_trips(chain, json_data):
         assert chain.address_from_index(address.address_num, address.type) == address
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="addresses_with_prefix only searches prefixes starting with 1 or 3 (mainnet P2PKH and P2SH)",
+@pytest.mark.parametrize(
+    "key",
+    [
+        "address-p2pkh-spend-0",
+        "address-p2sh-spend-0",
+        pytest.param("address-p2wpkh-spend-0", marks=[pytest.mark.btc, pytest.mark.ltc]),
+        pytest.param("address-p2wsh-spend-0", marks=[pytest.mark.btc, pytest.mark.ltc]),
+    ],
 )
-def test_addresses_with_prefix_finds_regtest_addresses(chain, json_data):
-    address_string = json_data["address-p2pkh-spend-0"]
-    found = chain.addresses_with_prefix(address_string[:6])
+def test_addresses_with_prefix(chain, json_data, key):
+    address_string = json_data[key]
+    prefix = address_string[:8]
+
+    found = chain.addresses_with_prefix(prefix)
+
     assert chain.address_from_string(address_string) in found
+    assert all(address.address_string.startswith(prefix) for address in found)
+
+
+def test_addresses_with_prefix_ignores_an_empty_prefix(chain):
+    assert chain.addresses_with_prefix("") == []
 
 
 def test_reload_keeps_the_chain_readable(chain):
