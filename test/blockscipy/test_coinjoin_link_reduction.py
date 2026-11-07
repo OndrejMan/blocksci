@@ -68,7 +68,7 @@ def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_c
 
 @pytest.mark.btc
 def test_linked_coinjoin_filter_rejects_negative_min_input_count(linked_coinjoin_chain):
-    with pytest.raises(ValueError, match="min_input_count must be non-negative"):
+    with pytest.raises(TypeError, match="incompatible function arguments"):
         linked_coinjoin_chain.filter_coinjoin_txes(
             0,
             len(linked_coinjoin_chain),

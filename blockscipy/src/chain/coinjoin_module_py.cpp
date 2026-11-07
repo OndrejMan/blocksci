@@ -26,16 +26,6 @@ using namespace blocksci;
 
 using json = nlohmann::json;
 
-std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) {
-    if (minInputCount.has_value() && minInputCount.value() < 0) {
-        throw std::invalid_argument("min_input_count must be non-negative");
-    }
-    if (!minInputCount.has_value()) {
-        return std::nullopt;
-    }
-    return static_cast<uint64_t>(minInputCount.value());
-}
-
 void warnSubsetMatchingDeprecated() {
     if (PyErr_WarnEx(PyExc_DeprecationWarning,
                      "scan_coinjoins_by_subset_matching is deprecated: its input-subset backtracking is exponential "
@@ -58,8 +48,8 @@ void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) 
 std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
-    std::optional<int> minInputCount = std::nullopt) {
-    const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, subtype, validateMinInputCount(minInputCount)};
+    std::optional<uint64_t> minInputCount = std::nullopt) {
+    const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, subtype, minInputCount};
     auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
         return detector.detect(tx);
     });
@@ -333,7 +323,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
         .def(
             "filter_coinjoin_txes",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
-               std::optional<int> minInputCount) {
+               std::optional<uint64_t> minInputCount) {
                 return findLinkedCjTxes(start, stop, coinjoinType, chain, std::nullopt, std::nullopt, minInputCount);
             },
             "Return CoinJoin candidates that are directly linked to another candidate in the selected block range",
@@ -342,9 +332,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
         .def(
             "filter_coinjoin_txes_raw",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
-               std::optional<int> minInputCount) {
-                const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, std::nullopt,
-                                                                      validateMinInputCount(minInputCount)};
+               std::optional<uint64_t> minInputCount) {
+                const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, std::nullopt, minInputCount};
                 py::gil_scoped_release release;
                 return chain[{start, stop}].filter([&](const Transaction &tx) {
                     return detector.detect(tx);
