@@ -62,11 +62,6 @@ def test_outputs_unspent(chain):
     assert chain.blocks.outputs.unspent().to_list() == [output for output in everything if not output.is_spent]
 
 
-@pytest.mark.xfail(
-    raises=AttributeError,
-    strict=True,
-    reason="outputs_unspent reads block_height on the optional spending_tx proxy instead of mapping it",
-)
 def test_outputs_unspent_at_height(chain):
     everything = chain.blocks.outputs.to_list()
     height = split_threshold([output.spending_tx.block_height for output in spent_outputs(chain)])
