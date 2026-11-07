@@ -90,19 +90,11 @@ def test_outputs_spent_with_age_split_at_the_given_age(chain):
     age = split_threshold([output_age(output) for output in spent])
 
     younger = outputs.spent_with_age_less_than(age).to_list()
-    older = outputs.outputs_spent_with_age_greater_than(age).to_list()
+    older = outputs.spent_with_age_greater_than(age).to_list()
 
     assert younger == [output for output in spent if output_age(output) < age]
     assert older == [output for output in spent if output_age(output) >= age]
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="the method is registered as outputs_spent_with_age_greater_than, unlike its spent_* siblings",
-)
-def test_outputs_spent_with_age_greater_than_follows_the_naming_of_its_siblings():
-    for cls in (blocksci.OutputIterator, blocksci.OutputRange):
-        assert hasattr(cls, "spent_with_age_greater_than")
+    assert outputs.outputs_spent_with_age_greater_than(age).to_list() == older
 
 
 def test_outputs_with_address_type(chain):

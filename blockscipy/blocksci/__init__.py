@@ -817,14 +817,16 @@ OutputIterator.unspent = outputs_unspent
 OutputIterator.spent_before_height = outputs_spent_before_height
 OutputIterator.spent_after_height = outputs_spent_after_height
 OutputIterator.spent_with_age_less_than = outputs_spent_with_age_less_than
-OutputIterator.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputIterator.spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputIterator.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than  # old name
 OutputIterator.with_address_type = outputs_with_address_type
 
 OutputRange.unspent = outputs_unspent
 OutputRange.spent_before_height = outputs_spent_before_height
 OutputRange.spent_after_height = outputs_spent_after_height
 OutputRange.spent_with_age_less_than = outputs_spent_with_age_less_than
-OutputRange.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputRange.spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputRange.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than  # old name
 OutputRange.with_address_type = outputs_with_address_type
 
 
