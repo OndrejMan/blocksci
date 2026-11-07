@@ -793,7 +793,9 @@ def outputs_unspent(outputs, height = -1):
     if height == -1:
         return outputs.where(lambda output: ~output.is_spent)
     else:
-        return outputs.where(lambda output: (~output.is_spent) | (output.spending_tx.block_height.or_value(0) > height))
+        return outputs.where(
+            lambda output: (~output.is_spent) | (output.spending_tx.map(lambda tx: tx.block_height).or_value(0) > height)
+        )
 
 def outputs_spent_before_height(outputs, height):
     return outputs.where(lambda output: output.is_spent).where(lambda output: output.spending_tx.map(lambda tx: tx.block_height).or_value(0) < height)
