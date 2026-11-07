@@ -70,12 +70,12 @@ def mapreduce_block_ranges(chain, map_func, reduce_func, init=MISSING_PARAM, sta
     """
     if start is None:
         start = 0
-        if end is None:
-            end = len(chain)
     elif isinstance(start, str):
         blocks = chain.range(start, end)
         start = blocks[0].height
         end = blocks[-1].height
+    if end is None:
+        end = len(chain)
 
     if cpu_count == 1:
         return map_func(chain[start:end])
