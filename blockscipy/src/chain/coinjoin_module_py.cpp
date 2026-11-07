@@ -36,12 +36,6 @@ std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) 
     return static_cast<uint64_t>(minInputCount.value());
 }
 
-blocksci::heuristics::CoinjoinDetector makeCoinjoinDetector(const std::string &coinjoinType,
-                                                             std::optional<int> minInputCount,
-                                                             std::optional<std::string> subtype = std::nullopt) {
-    return {coinjoinType, subtype, validateMinInputCount(minInputCount)};
-}
-
 void warnSubsetMatchingDeprecated() {
     if (PyErr_WarnEx(PyExc_DeprecationWarning,
                      "scan_coinjoins_by_subset_matching is deprecated: its input-subset backtracking is exponential "
@@ -65,7 +59,7 @@ std::unordered_set<Transaction> findLinkedCjTxes(
     int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
     std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
     std::optional<int> minInputCount = std::nullopt) {
-    auto detector = makeCoinjoinDetector(coinjoinType, minInputCount, subtype);
+    const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, subtype, validateMinInputCount(minInputCount)};
     auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
         return detector.detect(tx);
     });
@@ -93,10 +87,10 @@ using OneTxConsolidationType = std::unordered_map<Transaction, ConsolidationTxCo
 using ConsolidationType = std::unordered_map<LevelType, OneTxConsolidationType>;
 using ConsolidationResultType = std::unordered_map<Transaction, ConsolidationType>;
 
-ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int maxLevel, std::string coinjoinType) {
+ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int maxLevel,
+                                                  const blocksci::heuristics::CoinjoinDetector &detector) {
     ConsolidationResultType result;
     result[tx] = {};
-    auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
     if (!detector.detect(tx)) {
         return result;
     }
@@ -172,7 +166,7 @@ ConsolidationResultType get_consolidations_for_tx(const Transaction &tx, int max
 
 ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeight start, BlockHeight stop,
                                                     std::string coinjoinType, int maxLevel) {
-    blocksci::heuristics::validateCoinjoinParameters(coinjoinType);
+    const blocksci::heuristics::CoinjoinDetector detector{coinjoinType};
     ConsolidationResultType result;
 
     using MapType = ConsolidationResultType;
@@ -184,7 +178,7 @@ ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeig
     };
 
     auto mapFunc = [&](const Transaction &tx) -> MapType {
-        return get_consolidations_for_tx(tx, maxLevel, coinjoinType);
+        return get_consolidations_for_tx(tx, maxLevel, detector);
     };
 
     return chain[{start, stop}].mapReduce<MapType, decltype(mapFunc), decltype(reduceFunc)>(mapFunc, reduceFunc);
@@ -349,7 +343,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "filter_coinjoin_txes_raw",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string coinjoinType,
                std::optional<int> minInputCount) {
-                auto detector = makeCoinjoinDetector(coinjoinType, minInputCount);
+                const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, std::nullopt,
+                                                                      validateMinInputCount(minInputCount)};
                 py::gil_scoped_release release;
                 return chain[{start, stop}].filter([&](const Transaction &tx) {
                     return detector.detect(tx);
@@ -519,7 +514,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "get_coinjoin_consolidations",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, double inputOutputRatio,
                std::string coinjoinType, int maxHops) {
-                auto detector = blocksci::heuristics::CoinjoinDetector{coinjoinType};
+                const blocksci::heuristics::CoinjoinDetector detector{coinjoinType};
                 using ResultType =
                     std::map<std::string, std::vector<Transaction>>;              // consolidation_type, [input_tx_hash]
                 using MapType = std::vector<std::pair<Transaction, ResultType>>;  // tx_hash, ResultType
