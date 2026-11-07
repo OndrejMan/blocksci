@@ -833,8 +833,9 @@ OutputRange.with_address_type = outputs_with_address_type
 def coinjoin_txes(txes):
     return txes.where(heuristics.is_coinjoin)
 
-def possible_coinjoin_txes(txes):
-    return txes.where(heuristics.is_possible_coinjoin)
+def possible_coinjoin_txes(txes, min_base_fee, percentage_fee, max_depth=0):
+    detector = heuristics.is_possible_coinjoin(min_base_fee, percentage_fee, max_depth)
+    return txes.where(detector == int(CoinJoinResult.__members__["True"]))
 
 def address_deanon_txes(txes):
     return txes.where(heuristics.is_address_deanon)

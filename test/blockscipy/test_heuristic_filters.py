@@ -50,14 +50,14 @@ def test_heuristic_tx_filters_match_their_predicates(chain, filter_name, predica
     assert selected == [tx for tx in txes.to_list() if predicate(tx)]
 
 
-@pytest.mark.xfail(
-    raises=TypeError,
-    strict=True,
-    reason="possible_coinjoin_txes passes is_possible_coinjoin, which needs fee parameters, as a predicate",
-)
 def test_possible_coinjoin_txes(chain, json_data):
-    selected = blocksci.heuristics.possible_coinjoin_txes(chain.blocks.txes).to_list()
+    txes = chain.blocks.txes
+    detector = blocksci.heuristics.is_possible_coinjoin(10_000, 0.0, 200_000)
+
+    selected = blocksci.heuristics.possible_coinjoin_txes(txes, 10_000, 0.0, 200_000).to_list()
+
     assert json_data["simple-coinjoin-tx"] in {str(tx.hash) for tx in selected}
+    assert selected == [tx for tx in txes.to_list() if detector(tx) == int(COINJOIN_RESULT["True"])]
 
 
 @pytest.mark.parametrize("detector_name", ["is_possible_coinjoin", "is_definite_coinjoin"])
