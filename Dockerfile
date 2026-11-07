@@ -51,6 +51,9 @@ ARG NTHREADS=1
 
 WORKDIR /mnt
 COPY . /mnt/blocksci
+# A prebuilt DEPS_IMAGE can carry an older environment; build.sh syncs this
+# current lock before installing the Python bindings and starting notebooks.
+COPY pyproject.toml uv.lock /blocksci/
 
 # Cache compiler output between builds. The ccache wrappers intercept gcc-7/g++-7;
 # if ccache is missing from DEPS_IMAGE, the build runs without caching.
