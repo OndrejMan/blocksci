@@ -40,6 +40,7 @@ namespace blocksci {
             CoinjoinUtils::FirstWasabiBlock = cjConfig.FirstWasabiBlock;
             CoinjoinUtils::FirstWasabi2Block = cjConfig.FirstWasabi2Block;
             CoinjoinUtils::FirstWasabiNoCoordAddressBlock = cjConfig.FirstWasabiNoCoordAddressBlock;
+            CoinjoinUtils::FirstAshigaruBlock = cjConfig.FirstAshigaruBlock;
         }
     }
     
