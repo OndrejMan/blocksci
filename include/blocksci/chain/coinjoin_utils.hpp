@@ -138,6 +138,8 @@ namespace blocksci {
         static inline int64_t FirstSamouraiBlock = 570000;
         static inline int64_t FirstWasabiNoCoordAddressBlock = 610000;
         static inline int64_t FirstAshigaruBlock = 890000;  // a guess, but yea
+        // 850237 is July 1st 2024
+        static constexpr int64_t FirstPostZkSNACKsBlock = 850237;
     };
 
 }  // namespace blocksci

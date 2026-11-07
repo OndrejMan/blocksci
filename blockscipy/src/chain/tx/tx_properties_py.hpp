@@ -14,6 +14,7 @@
 
 #include <blocksci/chain/algorithms.hpp>
 #include <blocksci/chain/block.hpp>
+#include <blocksci/chain/coinjoin_utils.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <optional>
 #include <string>
@@ -148,8 +149,7 @@ struct AddTransactionMethods {
             property_tag, "coinjoin_tag",
             +[](const Transaction &tx) -> int64_t {
                 if (blocksci::heuristics::isWasabi2CoinJoin(tx)) {
-                    // 850237 is July 1st 2024
-                    return tx.block().height() < 850237
+                    return tx.block().height() < blocksci::CoinjoinUtils::FirstPostZkSNACKsBlock
                                ? static_cast<int64_t>(blocksci::heuristics::CoinJoinType::WW2zkSNACKs)
                                : static_cast<int64_t>(blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs);
                 } else if (blocksci::heuristics::isWhirlpoolCoinJoin(tx)) {
