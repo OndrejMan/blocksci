@@ -39,6 +39,7 @@ void init_heuristics(py::module &m) {
         .value("WW1", heuristics::CoinJoinType::WW1)
         .value("Whirlpool", heuristics::CoinJoinType::Whirlpool)
         .value("Ashigaru", heuristics::CoinJoinType::Ashigaru)
+        .value("JoinMarket", heuristics::CoinJoinType::JoinMarket)
         .value("NoCJ", heuristics::CoinJoinType::None);
 
     py::enum_<heuristics::CoinJoinResult>(m, "CoinJoinResult")

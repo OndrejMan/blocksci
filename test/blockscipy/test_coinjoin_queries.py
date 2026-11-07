@@ -1,9 +1,6 @@
 import blocksci
 import pytest
 
-JOINMARKET_TAG = 5  # heuristics::CoinJoinType::JoinMarket
-
-
 def hashes(transactions):
     return {str(tx.hash) for tx in transactions}
 
@@ -17,20 +14,16 @@ def test_coinjoin_tag_of_joinmarket_and_regular_transactions(linked_coinjoin_cha
     chain = linked_coinjoin_chain
     coinjoins = linked_coinjoins(chain, linked_coinjoin_data)
 
-    assert [tx.coinjoin_tag for tx in coinjoins] == [JOINMARKET_TAG, JOINMARKET_TAG]
+    joinmarket = int(blocksci.CoinJoinType.JoinMarket)
+    assert [tx.coinjoin_tag for tx in coinjoins] == [joinmarket, joinmarket]
     regular = [tx for tx in chain.blocks.txes.to_list() if tx not in coinjoins]
     assert {tx.coinjoin_tag for tx in regular} == {int(blocksci.CoinJoinType.NoCJ)}
 
 
 @pytest.mark.btc
-@pytest.mark.xfail(
-    raises=AttributeError,
-    strict=True,
-    reason="the Python CoinJoinType enum lacks JoinMarket, so coinjoin_tag 5 has no name",
-)
 def test_coinjoin_type_names_the_joinmarket_tag(linked_coinjoin_chain, linked_coinjoin_data):
     coinjoin = linked_coinjoins(linked_coinjoin_chain, linked_coinjoin_data)[0]
-    assert coinjoin.coinjoin_tag == int(blocksci.CoinJoinType.JoinMarket)
+    assert blocksci.CoinJoinType(coinjoin.coinjoin_tag) == blocksci.CoinJoinType.JoinMarket
 
 
 @pytest.mark.btc
