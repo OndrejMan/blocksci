@@ -726,7 +726,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 auto decreaseAnonymityIfConsolidated = [&](const Transaction &tx) -> PointingToTransactionsType {
                     PointingToTransactionsType result;
                     // if it _is_ coinjoin and we ignore remixes
-                    if (isCollectedCoinjoin(tx)) {
+                    if (ignoreRemixes && isCollectedCoinjoin(tx)) {
                         return {};
                     }
 
