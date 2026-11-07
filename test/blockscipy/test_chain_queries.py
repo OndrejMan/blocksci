@@ -117,11 +117,6 @@ def test_mapreduce_blocks_over_a_subrange(chain):
     assert sorted(heights) == list(range(10, 20))
 
 
-@pytest.mark.xfail(
-    raises=TypeError,
-    strict=True,
-    reason="with start but no end, mapreduce_block_ranges passes end=None to _segment_indexes",
-)
 def test_mapreduce_blocks_from_start_to_the_tip(chain):
     count = chain.mapreduce_blocks(lambda block: 1, operator.add, 0, start=10, cpu_count=3)
     assert count == len(chain) - 10
