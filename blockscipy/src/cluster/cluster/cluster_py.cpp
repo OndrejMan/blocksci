@@ -134,7 +134,28 @@ void init_coinjoin_cluster_manager(pybind11::module &s) {
             "addresses, where 0 means only the coinjoin transaction itself, 1 means the coinjoin transaction and its "
             "direct neighbors, etc. The optional min_input_count overrides the Wasabi 2 minimum-input threshold and "
             "is accepted only when coinjoin_type is 'wasabi2'. Other CoinJoin types always use their production "
-            "criteria.");
+            "criteria.")
+        .def_static(
+            "create_clustering_from_txes",
+            [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::vector<Transaction> coinjoinTxes,
+               blocksci::coinjoin_heuristics::ClusteringHeuristic heuristicFunc, const std::string &outputPath,
+               bool overwrite, int maxDistance) {
+                py::scoped_ostream_redirect stream(std::cout, py::module::import("sys").attr("stdout"));
+
+                if (stop == -1) {
+                    stop = chain.size();
+                }
+                auto range = chain[{start, stop}];
+                return CoinjoinClusterManager::createClusteringFromTransactions(range, coinjoinTxes, heuristicFunc,
+                                                                                outputPath, overwrite, maxDistance);
+            },
+            py::arg("chain"), py::arg("start"), py::arg("stop"), py::arg("coinjoin_txes"), py::arg("heuristic_func"),
+            py::arg("output_path"), py::arg("overwrite") = false, py::arg("max_distance") = 2,
+            "Creates a clustering around the given CoinJoin transactions instead of running a CoinJoin detector, "
+            "so the clustering sees exactly the result of an earlier detection step, e.g. the first result of "
+            "Blockchain.scan_coinjoins_by_subset_matching. Every transaction must come from the supplied chain "
+            "instance and lie inside [start, stop); an "
+            "empty list yields an empty clustering. max_distance has the same meaning as in create_clustering.");
 }
 
 void init_cluster(py::class_<Cluster> &cl) {

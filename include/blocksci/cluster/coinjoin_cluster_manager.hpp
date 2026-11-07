@@ -5,6 +5,7 @@
 
 #include <blocksci/blocksci_export.h>
 
+#include <blocksci/chain/transaction.hpp>
 #include <blocksci/heuristics/tx_identification.hpp>
 #include <functional>
 #include <iostream>
@@ -13,6 +14,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "../external/dset/dset.h"
 #include "cluster.hpp"
@@ -80,6 +82,27 @@ namespace blocksci {
             BlockRange &chain, const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc,
             const std::string &outputPath, const std::string &coinjoinType, bool overwrite = false,
             int maxHops = 2, std::optional<uint64_t> minInputCount = std::nullopt);
+
+        /**
+         * Create a clustering around CoinJoin transactions found by an earlier detection step.
+         *
+         * Same as createClustering, except that no detector runs: the given transactions are the
+         * CoinJoins, so the clustering sees exactly the detection result (e.g. the subset-matching
+         * scan, which createClustering cannot select).
+         *
+         * @param chain BlockRange to cluster
+         * @param coinjoinTransactions CoinJoin transactions from the same DataAccess instance as `chain`,
+         *        each inside its block range
+         * @param clusteringFunc Clustering heuristic function
+         * @param outputPath Path to output directory
+         * @param overwrite Overwrite existing cluster data
+         * @param maxHops Maximum number of hops to collect addresses around CoinJoin transactions
+         * @return CoinjoinClusterManager instance
+         */
+        static CoinjoinClusterManager createClusteringFromTransactions(
+            BlockRange &chain, const std::vector<Transaction> &coinjoinTransactions,
+            const blocksci::coinjoin_heuristics::ClusteringHeuristic &clusteringFunc, const std::string &outputPath,
+            bool overwrite = false, int maxHops = 2);
 
         Cluster getCluster(const Address &address) const;
 
