@@ -73,7 +73,7 @@ def mapreduce_block_ranges(chain, map_func, reduce_func, init=MISSING_PARAM, sta
     elif isinstance(start, str):
         blocks = chain.range(start, end)
         start = blocks[0].height
-        end = blocks[-1].height
+        end = blocks[-1].height + 1
     if end is None:
         end = len(chain)
 
