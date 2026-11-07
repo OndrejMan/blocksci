@@ -11,14 +11,15 @@ def test_simple_coinjoin(chain, json_data):
 
 @pytest.mark.parametrize("detector", ["possible", "definite"])
 def test_subset_matching_scan_finds_simple_coinjoin(chain, json_data, detector):
-    detected, skipped = chain.scan_coinjoins_by_subset_matching(
-        0,
-        len(chain),
-        detector,
-        min_base_fee=10_000,
-        percentage_fee=0.0,
-        max_depth=200_000,
-    )
+    with pytest.warns(DeprecationWarning, match="filter_coinjoin_txes_raw"):
+        detected, skipped = chain.scan_coinjoins_by_subset_matching(
+            0,
+            len(chain),
+            detector,
+            min_base_fee=10_000,
+            percentage_fee=0.0,
+            max_depth=200_000,
+        )
 
     assert json_data["simple-coinjoin-tx"] in {str(tx.hash) for tx in detected}
     assert skipped == []
@@ -43,6 +44,12 @@ def test_subset_matching_scan_rejects_invalid_parameters(
             min_base_fee=min_base_fee,
             percentage_fee=percentage_fee,
         )
+
+
+@pytest.mark.parametrize("detector_name", ["is_possible_coinjoin", "is_definite_coinjoin"])
+def test_subset_matching_predicates_are_deprecated(detector_name):
+    with pytest.warns(DeprecationWarning, match="filter_coinjoin_txes_raw"):
+        getattr(blocksci.heuristics, detector_name)(10_000, 0.0, 200_000)
 
 
 def test_no_coinjoin(chain, json_data):

@@ -21,6 +21,8 @@ namespace blocksci {
 
         // original BlockSci heuristics
         enum class BLOCKSCI_EXPORT CoinJoinResult { True, False, Timeout };
+        // Deprecated: input-subset backtracking, exponential in the number of inputs and impractically slow on
+        // mainnet. Use the protocol detectors (CoinjoinDetector / isJoinMarketCoinJoin) instead.
         CoinJoinResult BLOCKSCI_EXPORT isPossibleCoinjoin(const Transaction &tx, int64_t minBaseFee,
                                                           double percentageFee, size_t maxDepth);
         CoinJoinResult BLOCKSCI_EXPORT isCoinjoinExtra(const Transaction &tx, int64_t minBaseFee, double percentageFee,

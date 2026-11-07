@@ -36,6 +36,16 @@ std::optional<uint64_t> validateMinInputCount(std::optional<int> minInputCount) 
     return static_cast<uint64_t>(minInputCount.value());
 }
 
+void warnSubsetMatchingDeprecated() {
+    if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                     "scan_coinjoins_by_subset_matching is deprecated: its input-subset backtracking is exponential "
+                     "in the number of inputs and impractically slow on mainnet; use "
+                     "filter_coinjoin_txes_raw(start, stop, \"joinmarket\") instead",
+                     1) != 0) {
+        throw py::error_already_set();
+    }
+}
+
 void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) {
     if (minBaseFee < 0) {
         throw std::invalid_argument("min_base_fee must be non-negative");
@@ -344,6 +354,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
             "scan_coinjoins_by_subset_matching",
             [](Blockchain &chain, BlockHeight start, BlockHeight stop, std::string detector, int64_t minBaseFee,
                double percentageFee, size_t maxDepth) {
+                warnSubsetMatchingDeprecated();
                 if (detector != "possible" && detector != "definite") {
                     throw std::invalid_argument("detector must be \"possible\" or \"definite\", got: " + detector);
                 }
@@ -371,6 +382,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 }
                 return py::make_tuple(detected, skipped);
             },
+            "Deprecated: the input-subset backtracking is impractically slow on mainnet; use "
+            "filter_coinjoin_txes_raw(start, stop, \"joinmarket\") instead. "
             "Scan the range with the input-subset-matching coinjoin detector. Not protocol-specific: the "
             "\"possible\" and \"definite\" detectors match any transaction with equal-value outputs fundable by "
             "distinct input subsets. Returns (detected, skipped); skipped are searches that hit max_depth.",
