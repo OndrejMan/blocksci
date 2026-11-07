@@ -30,9 +30,7 @@ def test_regtest_config_disables_coinjoin_height_thresholds(linked_coinjoin_chai
 
 
 @pytest.mark.btc
-def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
-    linked_coinjoin_chain, linked_coinjoin_data
-):
+def test_linked_coinjoin_filter_returns_both_endpoints(linked_coinjoin_chain, linked_coinjoin_data):
     first_txid = linked_coinjoin_data["linked-joinmarket-first-tx"]
     second_txid = linked_coinjoin_data["linked-joinmarket-second-tx"]
 
@@ -42,15 +40,30 @@ def test_linked_coinjoin_filter_excludes_false_positive_predecessor(
     assert len(linked) == 2
     assert txids(linked) == {first_txid, second_txid}
 
-    linked_without_false_positive = linked_coinjoin_chain.compute_anonymity_degradation(
-        0,
-        len(linked_coinjoin_chain),
-        0,
-        "joinmarket",
-        coinjoinSubType="linked-regression",
-        falseCoinjoins={first_txid},
+
+@pytest.mark.btc
+def test_anonymity_degradation_rejects_joinmarket(linked_coinjoin_chain):
+    with pytest.raises(ValueError, match="does not support coinjoin_type 'joinmarket'"):
+        linked_coinjoin_chain.compute_anonymity_degradation(0, len(linked_coinjoin_chain), 0, "joinmarket")
+
+
+@pytest.mark.btc
+def test_raw_coinjoin_filter_keeps_match_without_in_range_link(linked_coinjoin_chain):
+    linked = linked_coinjoin_chain.filter_coinjoin_txes(0, len(linked_coinjoin_chain), "joinmarket")
+    first_coinjoin_height = min(tx.block.height for tx in linked)
+
+    # The first fixture CoinJoin is linked only by the second one, in the next
+    # block. A single-block range therefore has a heuristic match but no
+    # in-range CoinJoin-to-CoinJoin link to reduce to.
+    raw = linked_coinjoin_chain.filter_coinjoin_txes_raw(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
     )
-    assert txids(linked_without_false_positive) == set()
+    reduced = linked_coinjoin_chain.filter_coinjoin_txes(
+        first_coinjoin_height, first_coinjoin_height + 1, "joinmarket"
+    )
+
+    assert len(raw) == 1
+    assert not reduced
 
 
 @pytest.mark.btc
