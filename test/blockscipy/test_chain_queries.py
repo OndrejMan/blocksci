@@ -122,6 +122,17 @@ def test_mapreduce_blocks_from_start_to_the_tip(chain):
     assert count == len(chain) - 10
 
 
+@pytest.mark.parametrize("cpu_count", [1, 3])
+def test_mapreduce_blocks_over_a_date_range(chain, cpu_count):
+    day = chain[len(chain) // 2].time.strftime("%Y-%m-%d")
+    expected = [block.height for block in chain.range(day)]
+
+    heights = chain.mapreduce_blocks(lambda block: [block.height], operator.add, [], start=day, cpu_count=cpu_count)
+
+    assert len(expected) > 1
+    assert sorted(heights) == expected
+
+
 def test_map_blocks(chain):
     assert chain.map_blocks(lambda block: block.height, cpu_count=3) == list(range(len(chain)))
 
