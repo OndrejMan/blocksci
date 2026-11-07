@@ -718,7 +718,7 @@ namespace blocksci {
             if (blockHeight < blocksci::CoinjoinUtils::FirstWasabi2Block) {
                 return false;
             }
-            auto inputLimit = blockHeight < 850237 ? 50 : 20;
+            auto inputLimit = blockHeight < blocksci::CoinjoinUtils::FirstPostZkSNACKsBlock ? 50 : 20;
             for (const auto &input : tx.inputs()) {
                 if (input.getType() != AddressType::Enum::WITNESS_PUBKEYHASH &&
                     input.getType() != AddressType::Enum::WITNESS_UNKNOWN) {
@@ -817,11 +817,11 @@ namespace blocksci {
                 return false;
             }
 
+            const auto denominationShare = blockHeight < blocksci::CoinjoinUtils::FirstPostZkSNACKsBlock ? 0.8 : 0.75;
             if (debug) {
-                std::cout << "Output count: " << count << ", " << tx.outputCount() * (blockHeight < 850237 ? 0.8 : 0.75)
-                          << std::endl;
+                std::cout << "Output count: " << count << ", " << tx.outputCount() * denominationShare << std::endl;
             }
-            return count > (tx.outputCount() * (blockHeight < 850237 ? 0.8 : 0.75));
+            return count > (tx.outputCount() * denominationShare);
         }
 
         /**
@@ -1276,9 +1276,9 @@ namespace blocksci {
 
         CoinJoinType getCoinjoinTag(const Transaction &tx) {
             if (blocksci::heuristics::isWasabi2CoinJoin(tx)) {
-                // 850237 is July 1st 2024
-                return tx.getBlockHeight() < 850237 ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
-                                                   : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
+                return tx.getBlockHeight() < blocksci::CoinjoinUtils::FirstPostZkSNACKsBlock
+                           ? blocksci::heuristics::CoinJoinType::WW2zkSNACKs
+                           : blocksci::heuristics::CoinJoinType::WW2PostzkSNACKs;
             } else if (blocksci::heuristics::isWhirlpoolCoinJoin(tx)) {
                 return blocksci::heuristics::CoinJoinType::Whirlpool;
             } else if (blocksci::heuristics::isAshigaruCoinJoin(tx)) {
