@@ -66,30 +66,48 @@ MixEvents classifyMixEvents(const Transaction &tx, const std::unordered_set<Tran
     return {{"inputs", std::move(inputs)}, {"outputs", std::move(outputs)}};
 }
 
-std::unordered_set<Transaction> findLinkedCjTxes(
-    int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
-    std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
-    std::optional<uint64_t> minInputCount = std::nullopt) {
+std::unordered_set<Transaction> findCjTxes(int start, int stop, std::string coinjoinType, Blockchain &chain,
+                                           std::optional<std::string> subtype = std::nullopt,
+                                           std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
+                                           std::optional<uint64_t> minInputCount = std::nullopt) {
     const blocksci::heuristics::CoinjoinDetector detector{coinjoinType, subtype, minInputCount};
-    auto txes = chain[{start, stop}].filter([&](const Transaction &tx) {
-        return detector.detect(tx);
-    });
-
-    if (txes.empty()) {
-        return {};
-    }
-
-    // filter txes which are not connected to any other coinjoin tx
     std::unordered_set<Transaction> txSet;
-    for (const auto &tx : txes) {
+    for (const auto &tx : chain[{start, stop}].filter([&](const Transaction &tx) { return detector.detect(tx); })) {
         if (falsePositives.has_value() &&
             falsePositives.value().find(tx.getHash().GetHex()) != falsePositives.value().end()) {
             continue;
         }
         txSet.insert(tx);
     }
+    return txSet;
+}
 
+std::unordered_set<Transaction> findLinkedCjTxes(
+    int start, int stop, std::string coinjoinType, Blockchain &chain, std::optional<std::string> subtype = std::nullopt,
+    std::optional<std::unordered_set<std::string>> falsePositives = std::nullopt,
+    std::optional<uint64_t> minInputCount = std::nullopt) {
+    auto txSet = findCjTxes(start, stop, std::move(coinjoinType), chain, std::move(subtype), std::move(falsePositives),
+                            minInputCount);
+    if (txSet.empty()) {
+        return {};
+    }
+    // filter txes which are not connected to any other coinjoin tx
     return detail::findLinkedCoinjoinTransactions(txSet);
+}
+
+// JoinMarket CoinJoins need not spend one another, so they are not reduced to linked ones. The JoinMarket
+// detector also matches other protocols' CoinJoins; those keep the type getCoinjoinTag gives them.
+std::unordered_set<Transaction> findJoinMarketCjTxes(int start, int stop, Blockchain &chain,
+                                                     std::optional<std::unordered_set<std::string>> falsePositives) {
+    auto txSet = findCjTxes(start, stop, "joinmarket", chain, std::nullopt, std::move(falsePositives));
+    for (auto it = txSet.begin(); it != txSet.end();) {
+        if (blocksci::heuristics::getCoinjoinTag(*it) == blocksci::heuristics::CoinJoinType::JoinMarket) {
+            ++it;
+        } else {
+            it = txSet.erase(it);
+        }
+    }
+    return txSet;
 }
 
 using HopCount = uint32_t;
@@ -651,17 +669,13 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                std::optional<std::tuple<int64_t, int64_t>> ww2DenomsBucket,
                std::optional<std::unordered_set<std::string>> falseCoinjoins) {
                 blocksci::heuristics::validateCoinjoinParameters(coinjoinType, std::nullopt, coinjoinSubType);
-                // The CoinJoin sets below keep only CoinJoins linked to another one of the same type. JoinMarket
-                // CoinJoins need not spend one another, so a linked set would silently miss standalone rounds.
-                if (coinjoinType == "joinmarket") {
-                    throw std::invalid_argument("compute_anonymity_degradation does not support coinjoin_type "
-                                                "'joinmarket'");
-                }
                 std::unordered_map<std::string, std::unordered_set<Transaction>> cjsOfGivenType;
                 std::unordered_set<Transaction> allCollectedCoinjoins;
-                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru"}) {
-                    // Find links only between CoinJoins of the same type.
-                    auto coinjoins = findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
+                for (const std::string &type : {"wasabi1", "wasabi2", "whirlpool", "ashigaru", "joinmarket"}) {
+                    // Find links only between CoinJoins of the same type; JoinMarket keeps every match.
+                    auto coinjoins = type == "joinmarket"
+                                         ? findJoinMarketCjTxes(start, stop, chain, falseCoinjoins)
+                                         : findLinkedCjTxes(start, stop, type, chain, std::nullopt, falseCoinjoins);
                     allCollectedCoinjoins.insert(coinjoins.begin(), coinjoins.end());
                     cjsOfGivenType.emplace(type, std::move(coinjoins));
                 }
@@ -671,8 +685,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 }
 
                 // A spend counts as a remix only when the spending transaction is one of the CoinJoins
-                // collected above: not JoinMarket, within [start, stop), not in falseCoinjoins and linked
-                // to another CoinJoin of its type. Spends into any other round stay in the anonymity set.
+                // collected above: within [start, stop), not in falseCoinjoins and, unless JoinMarket,
+                // linked to another CoinJoin of its type. Spends into any other round stay in the anonymity set.
                 auto isCollectedCoinjoin = [&](const Transaction &candidate) {
                     return allCollectedCoinjoins.find(candidate) != allCollectedCoinjoins.end();
                 };
@@ -895,7 +909,7 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
 
                 return result;
             },
-            "Compute anonymity degradation in coinjoins. Ignore remixes by default. JoinMarket is not supported.",
+            "Compute anonymity degradation in coinjoins. Ignore remixes by default.",
             pybind11::arg("start"),
             pybind11::arg("stop"), pybind11::arg("daysToConsider"), pybind11::arg("coinjoinType"),
             pybind11::arg("coinjoinSubType") = py::none(), pybind11::arg("ignoreNonStandardDenominations") = false,
