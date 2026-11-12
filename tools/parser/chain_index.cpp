@@ -141,11 +141,12 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
                 }
                 auto blocks = readBlocksImpl(reader, fileNum, localConfig.diskConfig);
                 
+                activeThreads--;
+                std::lock_guard<std::mutex> lock(m);
+
                 if (fileNum == maxFileNum && blocks.size() > 0) {
                     newestBlock = blocks.back();
                 }
-                activeThreads--;
-                std::lock_guard<std::mutex> lock(m);
                 
                 for (auto &block : blocks) {
                     blockList[block.hash] = block;
