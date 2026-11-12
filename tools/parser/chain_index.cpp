@@ -115,6 +115,7 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
     auto maxFileNum = maxBlockFileNum(fileNum, config);
     
     auto localConfig = config;
+    bool hasResumeBlock = !blockList.empty();
     
     std::mutex m;
     
@@ -144,8 +145,18 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
                 activeThreads--;
                 std::lock_guard<std::mutex> lock(m);
 
-                if (fileNum == maxFileNum && blocks.size() > 0) {
-                    newestBlock = blocks.back();
+                // Core may already have preallocated an empty next file. The
+                // cursor belongs to the last actual block, not that empty tail.
+                if (!blocks.empty()) {
+                    const auto &lastBlock = blocks.back();
+                    const bool isFirstBlockFound = !hasResumeBlock;
+                    const bool isInLaterFile = lastBlock.nFile > newestBlock.nFile;
+                    const bool isLaterInSameFile = lastBlock.nFile == newestBlock.nFile &&
+                                                   lastBlock.nDataPos > newestBlock.nDataPos;
+                    if (isFirstBlockFound || isInLaterFile || isLaterInSameFile) {
+                        newestBlock = lastBlock;
+                        hasResumeBlock = true;
+                    }
                 }
                 
                 for (auto &block : blocks) {
