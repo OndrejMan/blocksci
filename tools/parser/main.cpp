@@ -44,6 +44,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cassert>
+#include <stdexcept>
 
 using json = nlohmann::json;
 
@@ -110,6 +111,10 @@ std::vector<blocksci::RawBlock> updateChain(const ParserConfiguration<ParserTag>
         std::ofstream of(config.blockListPath().str(), std::ios::binary);
         cereal::BinaryOutputArchive oa(of);
         oa(index);
+        of.close();
+        if (!of) {
+            throw std::runtime_error("Cannot persist parser chain index");
+        }
         return blocks;
     }();
 
