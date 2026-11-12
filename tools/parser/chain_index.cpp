@@ -22,6 +22,7 @@
 #include <cmath>
 #include <future>
 #include <iostream>
+#include <stdexcept>
 
 #ifdef BLOCKSCI_FILE_PARSER
 
@@ -108,6 +109,9 @@ void ChainIndex<FileTag>::update(const ConfigType &config, blocksci::BlockHeight
     if (!blockList.empty()) {
         fileNum = newestBlock.nFile;
         filePos = newestBlock.nDataPos + newestBlock.size;
+        if (!config.pathForBlockFile(fileNum).exists()) {
+            throw std::runtime_error("Parser resume block file is missing; restore it before updating");
+        }
     }
 
     auto firstFile = fileNum;
