@@ -272,27 +272,79 @@ namespace blocksci {
         }
     }
     
-    template<AddressType::Enum type>
-    std::vector<Address> getAddressesWithPrefixImp(const std::string &prefix, DataAccess &access) {
-        std::vector<Address> addresses;
-        auto count = access.getScripts().scriptCount(dedupType(type));
-        for (uint32_t scriptNum = 1; scriptNum <= count; scriptNum++) {
-            ScriptAddress<type> script(scriptNum, access);
-            if (script.addressString().compare(0, prefix.length(), prefix) == 0) {
-                addresses.emplace_back(scriptNum, type, access);
+    namespace {
+        // Whether a Base58Check address with this version prefix can start with the first character of prefix.
+        bool base58AddressCanStartWith(const std::vector<unsigned char> &version, const std::string &prefix) {
+            if (version.empty()) {
+                return false;
+            }
+            if (version[0] == 0) {
+                return prefix[0] == '1';
+            }
+            // 20 hash bytes and 4 checksum bytes follow the version.
+            std::vector<unsigned char> lowest(version), highest(version);
+            lowest.resize(version.size() + 24, 0x00);
+            highest.resize(version.size() + 24, 0xff);
+            auto low = EncodeBase58(lowest);
+            auto high = EncodeBase58(highest);
+            if (low.size() != high.size()) {
+                return true;
+            }
+            // Base58 digits are in ASCII order, so encodings of equal length keep the order of their values.
+            return low[0] <= prefix[0] && prefix[0] <= high[0];
+        }
+
+        bool segwitAddressCanStartWith(const std::string &humanReadablePart, const std::string &prefix) {
+            if (humanReadablePart.empty()) {
+                return false;
+            }
+            auto start = humanReadablePart + "1";
+            auto length = std::min(start.size(), prefix.size());
+            return start.compare(0, length, prefix, 0, length) == 0;
+        }
+
+        template <AddressType::Enum type, typename Filter>
+        void appendAddressesWithPrefix(const std::string &prefix, DataAccess &access, Filter isOfType,
+                                       std::vector<Address> &addresses) {
+            auto count = access.getScripts().scriptCount(dedupType(type));
+            for (uint32_t scriptNum = 1; scriptNum <= count; scriptNum++) {
+                if (!isOfType(scriptNum)) {
+                    continue;
+                }
+                ScriptAddress<type> script(scriptNum, access);
+                if (script.addressString().compare(0, prefix.length(), prefix) == 0) {
+                    addresses.emplace_back(scriptNum, type, access);
+                }
             }
         }
-        return addresses;
-    }
-    
+    }  // namespace
+
     std::vector<Address> getAddressesWithPrefix(const std::string &prefix, DataAccess &access) {
-        if (prefix.compare(0, 1, "1") == 0) {
-            return getAddressesWithPrefixImp<AddressType::Enum::PUBKEYHASH>(prefix, access);
-        } else if (prefix.compare(0, 1, "3") == 0) {
-            return getAddressesWithPrefixImp<AddressType::Enum::SCRIPTHASH>(prefix, access);
-        } else {
-            return {};
+        std::vector<Address> addresses;
+        if (prefix.empty()) {
+            return addresses;
         }
+        const auto &config = access.config.chainConfig;
+        auto anyScript = [](uint32_t) { return true; };
+        // P2SH and P2WSH share one script table; each script is only one of them.
+        auto isSegwitScriptHash = [&access](uint32_t scriptNum) {
+            return access.getScripts().getScriptData<DedupAddressType::SCRIPTHASH>(scriptNum)->isSegwit;
+        };
+
+        if (base58AddressCanStartWith(config.pubkeyPrefix, prefix)) {
+            appendAddressesWithPrefix<AddressType::Enum::PUBKEYHASH>(prefix, access, anyScript, addresses);
+        }
+        if (base58AddressCanStartWith(config.scriptPrefix, prefix)) {
+            appendAddressesWithPrefix<AddressType::Enum::SCRIPTHASH>(
+                prefix, access, [&](uint32_t scriptNum) { return !isSegwitScriptHash(scriptNum); }, addresses);
+        }
+        if (segwitAddressCanStartWith(config.segwitPrefix, prefix)) {
+            appendAddressesWithPrefix<AddressType::Enum::WITNESS_PUBKEYHASH>(prefix, access, anyScript, addresses);
+            appendAddressesWithPrefix<AddressType::Enum::WITNESS_SCRIPTHASH>(prefix, access, isSegwitScriptHash,
+                                                                             addresses);
+            appendAddressesWithPrefix<AddressType::Enum::WITNESS_UNKNOWN>(prefix, access, anyScript, addresses);
+        }
+        return addresses;
     }
     
     std::string fullTypeImp(const Address &address, DataAccess &access) {
