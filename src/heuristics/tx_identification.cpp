@@ -1095,12 +1095,10 @@ namespace blocksci {
                 return false;
             }
 
-            // Only one denomination is allowed to repeat (and only one value should have maxCount)
+            // The mix amount must be unambiguous. Different makers may have equal change,
+            // provided it repeats less often than the mix amount.
             int maxCountValues = 0;  // Count how many different values have maxCount
             for (const auto &p : valueCounts) {
-                if (p.second > 1 && p.second != maxCount) {
-                    return false;
-                }
                 if (p.second == maxCount) {
                     maxCountValues++;
                 }
