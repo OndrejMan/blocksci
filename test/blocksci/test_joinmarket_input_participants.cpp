@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <new>
 
 namespace {
@@ -108,6 +109,67 @@ TEST(JoinMarketCoinJoinTest, AcceptsOneInputAddressPerParticipant) {
 // address-reuse filter rejects that, so no separate input-uniqueness check is needed.
 TEST(JoinMarketCoinJoinTest, RejectsParticipantsSharingAnInputAddress) {
     SyntheticJoinMarketRound round(true);
+
+    EXPECT_FALSE(blocksci::heuristics::isJoinMarketCoinJoin(round.transaction));
+}
+
+namespace {
+
+class SyntheticJoinMarketChangeRound {
+    static constexpr uint16_t outputCount = 10;
+    alignas(std::max_align_t) std::array<
+        std::byte, sizeof(blocksci::RawTransaction) + (roundInputCount + outputCount) * sizeof(blocksci::Inout)>
+        storage{};
+    std::array<uint16_t, roundInputCount> spentOutputNums{};
+    std::array<uint32_t, roundInputCount> sequenceNums{};
+    int32_t version = 1;
+    blocksci::uint256 hash;
+    blocksci::DataAccess access;
+    blocksci::RawTransaction *rawTx;
+    blocksci::TxData data;
+
+public:
+    blocksci::Transaction transaction;
+
+    explicit SyntheticJoinMarketChangeRound(const std::array<int64_t, 5> &change)
+        : rawTx(new (storage.data()) blocksci::RawTransaction(0, 0, 0, roundInputCount, outputCount)),
+          data{rawTx, &version, &hash, spentOutputNums.data(), sequenceNums.data()},
+          transaction(data, 0, 1, 1, access) {
+        auto *inouts = reinterpret_cast<blocksci::Inout *>(rawTx + 1);
+        for (uint16_t index = 0; index < roundInputCount; ++index) {
+            new (&inouts[index]) blocksci::Inout(
+                0, index, blocksci::AddressType::WITNESS_PUBKEYHASH, 40'000 + change[index] + 1'000);
+        }
+        for (uint16_t index = 0; index < outputCount; ++index) {
+            const auto value = index < mixOutputCount ? 40'000 : change[index - mixOutputCount];
+            new (&inouts[roundInputCount + index]) blocksci::Inout(
+                0, roundInputCount + index, blocksci::AddressType::WITNESS_PUBKEYHASH, value);
+        }
+    }
+};
+
+}  // namespace
+
+TEST(JoinMarketCoinJoinTest, AcceptsRepeatedChangeLessFrequentThanMixAmount) {
+    // The two repeated-change shapes from the failed Kubernetes/PBS run.
+    for (const std::array<int64_t, 5> &change : {
+             std::array<int64_t, 5>{460'002, 460'002, 560'002, 2'960'002, 59'992},
+             std::array<int64_t, 5>{420'004, 420'004, 420'004, 420'004, 12'040}}) {
+        SyntheticJoinMarketChangeRound round(change);
+
+        EXPECT_TRUE(blocksci::heuristics::isJoinMarketCoinJoin(round.transaction));
+        EXPECT_TRUE(blocksci::heuristics::isCoinjoinOfGivenType(round.transaction, "joinmarket"));
+    }
+}
+
+TEST(JoinMarketCoinJoinTest, RejectsEquallyFrequentMixAndChangeValues) {
+    SyntheticJoinMarketChangeRound round({460'002, 460'002, 460'002, 460'002, 460'002});
+
+    EXPECT_FALSE(blocksci::heuristics::isJoinMarketCoinJoin(round.transaction));
+}
+
+TEST(JoinMarketCoinJoinTest, StillRejectsDustChangeWithRepeatedValues) {
+    SyntheticJoinMarketChangeRound round({460'002, 460'002, 560'002, 59'992, 4'999});
 
     EXPECT_FALSE(blocksci::heuristics::isJoinMarketCoinJoin(round.transaction));
 }

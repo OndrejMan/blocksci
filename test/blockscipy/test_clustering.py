@@ -126,7 +126,7 @@ def test_coinjoin_clustering_from_txes_rejects_other_chain_before_overwrite(
 
 
 @pytest.mark.btc
-def test_coinjoin_clustering_from_txes_keeps_repeated_change_coinjoins(
+def test_coinjoin_clustering_agrees_on_repeated_change_coinjoins(
     repeated_change_chain, repeated_change_data, tmpdir_factory
 ):
     chain = repeated_change_chain
@@ -143,18 +143,20 @@ def test_coinjoin_clustering_from_txes_keeps_repeated_change_coinjoins(
         counts = Counter(output.value for output in tx.outputs)
         assert max(counts.values()) == 5
         assert any(1 < count < 5 for count in counts.values())
-        assert not tx.is_joinmarket_coinjoin
-    assert not list(chain.filter_coinjoin_txes_raw(0, len(chain), "joinmarket"))
+        assert tx.is_joinmarket_coinjoin
+    assert {str(tx.hash) for tx in chain.filter_coinjoin_txes_raw(0, len(chain), "joinmarket")} == {
+        str(tx.hash) for tx in seeds
+    }
 
-    old = blocksci.cluster.CoinjoinClusterManager.create_clustering(
+    detected_clustering = blocksci.cluster.CoinjoinClusterManager.create_clustering(
         chain, 0, -1, blocksci.heuristics.coinjoin.one_output_consolidation_2hops,
-        str(tmpdir_factory.mktemp("repeated-change-old")), coinjoin_type="joinmarket",
+        str(tmpdir_factory.mktemp("repeated-change-detected")), coinjoin_type="joinmarket",
     )
-    new = _cluster_from_txes(chain, tmpdir_factory, "repeated-change-new", seeds)
+    seeded_clustering = _cluster_from_txes(chain, tmpdir_factory, "repeated-change-seeded", seeds)
     for tx in seeds:
         for io in tx.inputs.to_list() + tx.outputs.to_list():
-            assert old.cluster_with_address(io.address).address_count() == 0
-            assert new.cluster_with_address(io.address).address_count() > 0
+            assert detected_clustering.cluster_with_address(io.address).address_count() > 0
+            assert seeded_clustering.cluster_with_address(io.address).address_count() > 0
 
 
 def test_coinjoin_clustering_from_txes_applies_consolidation(chain, json_data, tmpdir_factory):
