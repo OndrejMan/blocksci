@@ -34,7 +34,10 @@ namespace blocksci {
         template <typename Transaction>
         MixEventType classifyCoinjoinInput(const std::unordered_set<Transaction> &coinjoins,
                                            const Transaction &spentTransaction) {
-            return coinjoins.find(spentTransaction) != coinjoins.end() ? MixEventType::Remix : MixEventType::Enter;
+            if (coinjoins.find(spentTransaction) != coinjoins.end()) {
+                return MixEventType::Remix;
+            }
+            return MixEventType::Enter;
         }
 
         /**
@@ -47,7 +50,10 @@ namespace blocksci {
             if (!spendingTransaction.has_value()) {
                 return MixEventType::Stay;
             }
-            return coinjoins.find(*spendingTransaction) != coinjoins.end() ? MixEventType::Remix : MixEventType::Leave;
+            if (coinjoins.find(*spendingTransaction) != coinjoins.end()) {
+                return MixEventType::Remix;
+            }
+            return MixEventType::Leave;
         }
 
     }  // namespace detail
