@@ -44,7 +44,9 @@ BLOCKSCIPY_COMPILE_DB="$(mktemp)" || exit 1
 trap 'rm -f "$BLOCKSCIPY_COMPILE_DB"' EXIT
 
 BLOCKSCIPY_COMPILE_COMMANDS_OUTPUT="$BLOCKSCIPY_COMPILE_DB" \
-    NTHREADS="$THREADS" CC=gcc-7 CXX=g++-7 uv pip install -e blockscipy || exit 1
+    NTHREADS="$THREADS" CC=gcc-7 CXX=g++-7 uv pip install --no-deps -e blockscipy || exit 1
+
+uv pip check || exit 1
 
 ##### COMPILE COMMANDS JSON MERGE FOR DEVELOPMENT #####
 cp build/compile_commands.json build/compile_commands.json.backup || exit 1
