@@ -995,7 +995,7 @@ namespace blocksci {
             // As the format identified at the end of section 2.1 is relatively broad - a standardized output and a
             // change output for each participant - it is likely we will detect transactions from other protocols or
             // softwares.
-            if (isWasabi1CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
+            if (isWasabi1CoinJoin(tx) || isWasabi2CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
                 return false;
             }
 
@@ -1064,7 +1064,7 @@ namespace blocksci {
         }
 
         bool isJoinMarketCoinJoin(const Transaction &tx) {
-            if (isWasabi1CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
+            if (isWasabi1CoinJoin(tx) || isWasabi2CoinJoin(tx) || isWhirlpoolCoinJoin(tx) || isAshigaruCoinJoin(tx)) {
                 return false;
             }
 
@@ -1124,16 +1124,17 @@ namespace blocksci {
             // ---------------------------------------------------------
             const size_t numIns = inputs.size();
             const size_t numOuts = outputs.size();
+            const size_t participantCount = static_cast<size_t>(maxCount);
 
             // Basic structural sanity - JoinMarket needs reasonable input/output counts
             if (numIns < 2 || numOuts < 3) {  // Minimum for any coinjoin
                 return false;
             }
 
-            // Input-to-participant ratio should be reasonable (0.5 to 5.0)
-            double inputParticipantRatio = static_cast<double>(numIns) / maxCount;
-            if (inputParticipantRatio < 0.5 || inputParticipantRatio > 5.0) {
-                return false;  // Each participant typically contributes 1-3 inputs
+            // Each mix output belongs to one participant, who must contribute
+            // at least one input. Allow at most five inputs per mix output on average.
+            if (numIns < participantCount || numIns > 5 * participantCount) {
+                return false;
             }
 
             // Outputs should not exceed twice the number of equal mix outputs
@@ -1164,17 +1165,8 @@ namespace blocksci {
             }
 
             // ---------------------------------------------------------
-            // 5. Input/output uniqueness sanity
+            // 5. Output uniqueness sanity
             // ---------------------------------------------------------
-            std::unordered_set<Address> uniqueInputs;
-            for (const auto &i : inputs) {
-                uniqueInputs.insert(i.getAddress());
-            }
-            size_t minUniqueInputs = static_cast<size_t>(maxCount * 0.67);
-            if (uniqueInputs.size() < minUniqueInputs) {
-                return false;
-            }
-
             std::unordered_set<Address> uniqueOutputs;
             for (const auto &o : outputs) {
                 uniqueOutputs.insert(o.getAddress());
@@ -1213,7 +1205,7 @@ namespace blocksci {
             // For N participants, allow 0 to N change outputs
             // 0 = no participant has change (all inputs exactly equal mix amount)
             // N = every participant has change
-            if (changeOutputCount < 0 || changeOutputCount > maxCount) {
+            if (changeOutputCount > maxCount) {
                 return false;
             }
 
