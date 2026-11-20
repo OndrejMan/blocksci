@@ -2,7 +2,6 @@
 #define BLOCKSCI_COINJOIN_MIX_EVENTS_HPP
 
 #include <optional>
-#include <string>
 #include <unordered_set>
 
 namespace blocksci { namespace coinjoin {
@@ -10,23 +9,10 @@ namespace blocksci { namespace coinjoin {
     /**
      * Movement of a CoinJoin input or output across the mix boundary, the
      * transaction-centric liquidity classification of Svenda et al. (PETS 2026,
-     * section 4.3.2). The names match coinjoin-analysis' MIX_EVENT_TYPE.
+     * section 4.3.2). Python sees it as blocksci.MixEventType, whose names match
+     * coinjoin-analysis' MIX_EVENT_TYPE.
      */
     enum class MixEventType { Enter, Remix, Leave, Stay };
-
-    inline std::string mixEventName(MixEventType event) {
-        switch (event) {
-            case MixEventType::Enter:
-                return "MIX_ENTER";
-            case MixEventType::Remix:
-                return "MIX_REMIX";
-            case MixEventType::Leave:
-                return "MIX_LEAVE";
-            case MixEventType::Stay:
-                return "MIX_STAY";
-        }
-        return "";
-    }
 
     namespace detail {
 

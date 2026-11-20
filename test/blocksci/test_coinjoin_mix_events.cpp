@@ -7,7 +7,6 @@
 #include <unordered_set>
 
 using blocksci::coinjoin::MixEventType;
-using blocksci::coinjoin::mixEventName;
 using blocksci::coinjoin::detail::classifyCoinjoinInput;
 using blocksci::coinjoin::detail::classifyCoinjoinOutput;
 
@@ -34,12 +33,4 @@ TEST(CoinjoinMixEventsTest, OutputSpentOutsideTheMixLeaves) {
 
 TEST(CoinjoinMixEventsTest, UnspentOutputStays) {
     EXPECT_EQ(classifyCoinjoinOutput(coinjoins, std::optional<std::string>{}), MixEventType::Stay);
-}
-
-// The pipeline compares these names with coinjoin-analysis' MIX_EVENT_TYPE values.
-TEST(CoinjoinMixEventsTest, NamesMatchCoinjoinAnalysis) {
-    EXPECT_EQ(mixEventName(MixEventType::Enter), "MIX_ENTER");
-    EXPECT_EQ(mixEventName(MixEventType::Remix), "MIX_REMIX");
-    EXPECT_EQ(mixEventName(MixEventType::Leave), "MIX_LEAVE");
-    EXPECT_EQ(mixEventName(MixEventType::Stay), "MIX_STAY");
 }

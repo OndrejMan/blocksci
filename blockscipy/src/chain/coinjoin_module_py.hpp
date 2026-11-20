@@ -12,6 +12,7 @@
 
 #include <blocksci/chain/chain_fwd.hpp>
 
+void init_mix_event_type(pybind11::module &m);
 void init_coinjoin_module(pybind11::class_<blocksci::Blockchain> &cl);
 
 #endif /* coinjoin_module_py_hpp */

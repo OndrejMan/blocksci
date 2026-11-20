@@ -46,19 +46,20 @@ void validateSubsetMatchingParameters(int64_t minBaseFee, double percentageFee) 
     }
 }
 
-using MixEvents = std::unordered_map<std::string, std::vector<std::string>>;
+using coinjoin::MixEventType;
+using MixEvents = std::unordered_map<std::string, std::vector<MixEventType>>;
 
 /** Liquidity event of every input and output of a CoinJoin, in index order, with coinjoins as the mix. */
 MixEvents classifyMixEvents(const Transaction &tx, const std::unordered_set<Transaction> &coinjoins) {
-    std::vector<std::string> inputs;
+    std::vector<MixEventType> inputs;
     for (const auto &input : tx.inputs()) {
-        inputs.push_back(coinjoin::mixEventName(coinjoin::detail::classifyCoinjoinInput(coinjoins, input.getSpentTx())));
+        inputs.push_back(coinjoin::detail::classifyCoinjoinInput(coinjoins, input.getSpentTx()));
     }
-    std::vector<std::string> outputs;
+    std::vector<MixEventType> outputs;
     for (const auto &output : tx.outputs()) {
         auto spendingTx = output.getSpendingTx();
         auto spending = spendingTx ? std::optional<Transaction>{*spendingTx} : std::nullopt;
-        outputs.push_back(coinjoin::mixEventName(coinjoin::detail::classifyCoinjoinOutput(coinjoins, spending)));
+        outputs.push_back(coinjoin::detail::classifyCoinjoinOutput(coinjoins, spending));
     }
     return {{"inputs", std::move(inputs)}, {"outputs", std::move(outputs)}};
 }
@@ -190,6 +191,16 @@ ConsolidationResultType get_coinjoin_consolidations(Blockchain &chain, BlockHeig
     };
 
     return chain[{start, stop}].mapReduce<MapType, decltype(mapFunc), decltype(reduceFunc)>(mapFunc, reduceFunc);
+}
+
+void init_mix_event_type(py::module &m) {
+    // Python names equal coinjoin-analysis' MIX_EVENT_TYPE, so .name compares with it directly.
+    py::enum_<MixEventType>(m, "MixEventType",
+                            "Liquidity event of a CoinJoin input or output (Svenda et al., PETS 2026, section 4.3.2)")
+        .value("MIX_ENTER", MixEventType::Enter)
+        .value("MIX_REMIX", MixEventType::Remix)
+        .value("MIX_LEAVE", MixEventType::Leave)
+        .value("MIX_STAY", MixEventType::Stay);
 }
 
 void init_coinjoin_module(py::class_<Blockchain> &cl) {
@@ -411,7 +422,8 @@ void init_coinjoin_module(py::class_<Blockchain> &cl) {
                 }
                 return result;
             },
-            "Classify every input and output of the given CoinJoins as MIX_ENTER, MIX_REMIX, MIX_LEAVE or MIX_STAY "
+            "Classify every input and output of the given CoinJoins as a MixEventType: MIX_ENTER, MIX_REMIX, "
+            "MIX_LEAVE or MIX_STAY "
             "(the liquidity events of Svenda et al., PETS 2026, section 4.3.2). The given transactions are the mix: "
             "an input spending one of them is a remix, any other input enters; an output spent by one of them is a "
             "remix, one spent by another transaction leaves, an unspent one stays. Pass the result of a detection "

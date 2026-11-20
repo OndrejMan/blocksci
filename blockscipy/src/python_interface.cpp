@@ -191,6 +191,7 @@ PYBIND11_MODULE(_blocksci, m) {
     init_heuristics(m);
     init_data_access(m);
     init_blockchain(blockchainCl);
+    init_mix_event_type(m);
     init_coinjoin_module(blockchainCl);
     init_uint160(uint160Cl);
     init_uint256(uint256Cl);
