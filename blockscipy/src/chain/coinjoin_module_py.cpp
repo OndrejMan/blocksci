@@ -52,13 +52,13 @@ using MixEvents = std::unordered_map<std::string, std::vector<std::string>>;
 MixEvents classifyMixEvents(const Transaction &tx, const std::unordered_set<Transaction> &coinjoins) {
     std::vector<std::string> inputs;
     for (const auto &input : tx.inputs()) {
-        inputs.push_back(mixEventName(detail::classifyCoinjoinInput(coinjoins, input.getSpentTx())));
+        inputs.push_back(coinjoin::mixEventName(coinjoin::detail::classifyCoinjoinInput(coinjoins, input.getSpentTx())));
     }
     std::vector<std::string> outputs;
     for (const auto &output : tx.outputs()) {
         auto spendingTx = output.getSpendingTx();
         auto spending = spendingTx ? std::optional<Transaction>{*spendingTx} : std::nullopt;
-        outputs.push_back(mixEventName(detail::classifyCoinjoinOutput(coinjoins, spending)));
+        outputs.push_back(coinjoin::mixEventName(coinjoin::detail::classifyCoinjoinOutput(coinjoins, spending)));
     }
     return {{"inputs", std::move(inputs)}, {"outputs", std::move(outputs)}};
 }

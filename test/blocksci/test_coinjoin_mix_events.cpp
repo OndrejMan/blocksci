@@ -6,10 +6,10 @@
 #include <string>
 #include <unordered_set>
 
-using blocksci::MixEventType;
-using blocksci::mixEventName;
-using blocksci::detail::classifyCoinjoinInput;
-using blocksci::detail::classifyCoinjoinOutput;
+using blocksci::coinjoin::MixEventType;
+using blocksci::coinjoin::mixEventName;
+using blocksci::coinjoin::detail::classifyCoinjoinInput;
+using blocksci::coinjoin::detail::classifyCoinjoinOutput;
 
 namespace {
     // A and B are the CoinJoins of the mix; F funds A and P is a postmix spend.

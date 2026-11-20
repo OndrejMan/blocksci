@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_set>
 
-namespace blocksci {
+namespace blocksci { namespace coinjoin {
 
     /**
      * Movement of a CoinJoin input or output across the mix boundary, the
@@ -57,6 +57,6 @@ namespace blocksci {
         }
 
     }  // namespace detail
-}  // namespace blocksci
+}}  // namespace blocksci::coinjoin
 
 #endif  // BLOCKSCI_COINJOIN_MIX_EVENTS_HPP
