@@ -70,12 +70,12 @@ def mapreduce_block_ranges(chain, map_func, reduce_func, init=MISSING_PARAM, sta
     """
     if start is None:
         start = 0
-        if end is None:
-            end = len(chain)
     elif isinstance(start, str):
         blocks = chain.range(start, end)
         start = blocks[0].height
-        end = blocks[-1].height
+        end = blocks[-1].height + 1
+    if end is None:
+        end = len(chain)
 
     if cpu_count == 1:
         return map_func(chain[start:end])
@@ -793,7 +793,9 @@ def outputs_unspent(outputs, height = -1):
     if height == -1:
         return outputs.where(lambda output: ~output.is_spent)
     else:
-        return outputs.where(lambda output: (~output.is_spent) | (output.spending_tx.block_height.or_value(0) > height))
+        return outputs.where(
+            lambda output: (~output.is_spent) | (output.spending_tx.map(lambda tx: tx.block_height).or_value(0) > height)
+        )
 
 def outputs_spent_before_height(outputs, height):
     return outputs.where(lambda output: output.is_spent).where(lambda output: output.spending_tx.map(lambda tx: tx.block_height).or_value(0) < height)
@@ -815,22 +817,25 @@ OutputIterator.unspent = outputs_unspent
 OutputIterator.spent_before_height = outputs_spent_before_height
 OutputIterator.spent_after_height = outputs_spent_after_height
 OutputIterator.spent_with_age_less_than = outputs_spent_with_age_less_than
-OutputIterator.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputIterator.spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputIterator.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than  # old name
 OutputIterator.with_address_type = outputs_with_address_type
 
 OutputRange.unspent = outputs_unspent
 OutputRange.spent_before_height = outputs_spent_before_height
 OutputRange.spent_after_height = outputs_spent_after_height
 OutputRange.spent_with_age_less_than = outputs_spent_with_age_less_than
-OutputRange.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputRange.spent_with_age_greater_than = outputs_spent_with_age_greater_than
+OutputRange.outputs_spent_with_age_greater_than = outputs_spent_with_age_greater_than  # old name
 OutputRange.with_address_type = outputs_with_address_type
 
 
 def coinjoin_txes(txes):
     return txes.where(heuristics.is_coinjoin)
 
-def possible_coinjoin_txes(txes):
-    return txes.where(heuristics.is_possible_coinjoin)
+def possible_coinjoin_txes(txes, min_base_fee, percentage_fee, max_depth=0):
+    detector = heuristics.is_possible_coinjoin(min_base_fee, percentage_fee, max_depth)
+    return txes.where(detector == int(CoinJoinResult.__members__["True"]))
 
 def address_deanon_txes(txes):
     return txes.where(heuristics.is_address_deanon)
