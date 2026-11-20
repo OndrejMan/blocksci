@@ -44,6 +44,8 @@
 #include <iostream>
 #include <iomanip>
 #include <cassert>
+#include <cstdio>
+#include <stdexcept>
 
 using json = nlohmann::json;
 
@@ -84,6 +86,26 @@ struct ChainUpdateInfo {
 };
 
 template <typename ParserTag>
+void publishResumeFile(const ParserConfiguration<ParserTag> &, const ChainIndex<ParserTag> &) {}
+
+#ifdef BLOCKSCI_FILE_PARSER
+void publishResumeFile(const ParserConfiguration<FileTag> &config, const ChainIndex<FileTag> &index) {
+    if (index.blockList.empty()) {
+        throw std::runtime_error("Cannot publish an empty parser resume checkpoint");
+    }
+    const auto path = config.blockListPath().str() + ".resume.json";
+    const auto temporary = path + ".tmp";
+    std::ofstream out(temporary);
+    out << json{{"schema_version", 1}, {"file_number", index.newestBlock.nFile},
+                {"data_offset", index.newestBlock.nDataPos}, {"block_size", index.newestBlock.size}} << '\n';
+    out.close();
+    if (!out || std::rename(temporary.c_str(), path.c_str()) != 0) {
+        throw std::runtime_error("Cannot publish parser resume checkpoint");
+    }
+}
+#endif
+
+template <typename ParserTag>
 std::vector<blocksci::RawBlock> updateChain(const ParserConfiguration<ParserTag> &config, blocksci::BlockHeight maxBlockNum, HashIndexCreator &hashDb) {
     using namespace std::chrono_literals;
 
@@ -110,6 +132,13 @@ std::vector<blocksci::RawBlock> updateChain(const ParserConfiguration<ParserTag>
         std::ofstream of(config.blockListPath().str(), std::ios::binary);
         cereal::BinaryOutputArchive oa(of);
         oa(index);
+        of.close();
+        if (!of) {
+            throw std::runtime_error("Cannot persist parser chain index");
+        }
+        // This is the exact newestBlock cursor, which can differ from the
+        // highest canonical block's file. Consumers use it only after update succeeds.
+        publishResumeFile(config, index);
         return blocks;
     }();
 
